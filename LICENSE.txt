@@ -1,0 +1,5 @@
+Copyright Ordamo Ltd 2016, all rights reserved.
+
+This software is available through the NPM package manager as a convenience
+for people with a license to use it. It is not open source software. Please
+contact Ordamo (http://www.ordamo.com/) for a license to use this software.
