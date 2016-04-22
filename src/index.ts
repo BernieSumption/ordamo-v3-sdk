@@ -30,14 +30,44 @@ if (typeof window === "undefined") {
 
 let INSTANCE_CREATED = false;
 
-const EMPTY_DATA_URI = "data:text/plain;charset=utf-8,";
-
+const MAX_SAVED_STATE_SECONDS = 10 * 60;
 
 /**
  * Return the SDK running mode, useful for distinguishing between test and live
  */
 export function getRunningMode() {
   return RUNNING_MODE;
+}
+
+export interface OrdamoSDKOptions<T> {
+  /**
+   * Required. A description of the content requirements of this SDK applicaiton,
+   * created using the sdk content functions e.g. {myImage: sdk.image(...)} 
+   */
+  contentSchema: T;
+
+  /**
+   * Required. A function to be called when data loading is complete and the
+   * app may begin rendering itself based on the layout and content.
+   */
+  initCallback: () => void;
+
+  /**
+   * An optional function to save the current state of the application. If provided, the
+   * result of calling this function will be available through sdkInstance.getSavedState()
+   * next time the application is launched, if it is still in use by the same users(s).
+   */
+  saveStateCallback?: () => any;
+
+  /**
+   * The V3 is a touch environment and mouse events will not work in production.
+   * By default, the SDK detects attempts to use mouse events and throws an exception
+   * allowing this error to be caught early. However if you are using a 3rd party
+   * library that attaches mouse event listeners, you may want to permit them here.
+   * 
+   * Note that they still won't work in production, this simply surpresses the error.
+   */
+  allowedMouseEventListeners?: boolean;
 }
 
 /**
@@ -47,45 +77,55 @@ export class OrdamoSDK<T> {
 
   public onNavigate: (event: string) => void;
 
-  private _content: SDKContent<T>;
-  private _filesById: { [id: string]: SDKFile };
-
-  private _initMessage: SDKInitMessage;
+  private _initMessage: InitMessage<T>;
   private _sentReadyEvent = false;
+  private _savedState: any = null;
 
   /**
    * When the OrdamoSDK instance is created it will communicate with the host application to
    * request the app's layout and content (or in development mode, use a mock layout and
-   * load content from mockcontent.json).
+   * load content from default-content.json).
    * 
-   * @param _initAppCallback a function to be called when data loading is complete and the
-   *        app may begin rendering itself based on the layout and content.
+   * @param _contentSchema 
    * 
-   * @param content If provided, the SDK will use this object as content instead of loading
-   *        content from the host application.
+   * @param _initAppCallback 
    */
-  constructor(private _initAppCallback?: Function, private _providedContent?: SDKContent<T>) {
+  constructor(private _options: OrdamoSDKOptions<T>) {
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
-      console.log(`OrdamoSDK running in development mode.`);
+      logNotice(`running in development mode.`);
+
+      logNotice("Emulating touch events.");
+      startTouchEmulation();
+
+      let chromeVersion = /\bChrome\/(\d+)/.exec(navigator.userAgent);
+      if (!(chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
+        alert("Sorry, Ordamo V3 apps require a recent version of Google Chrome to run. Please load this app in Chrome, and/or ensure that your copy of Chrome is up to date.");
+        throw new Error("Bad browser: " + navigator.userAgent);
+      }
     }
     if (INSTANCE_CREATED && RUNNING_MODE !== RunningMode.UNIT_TESTS) {
       throw new Error("Only one instance of OrdamoSDK may be created per application " + RUNNING_MODE);
     }
     INSTANCE_CREATED = true;
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
-      this.loadMockContentFile(this._acceptMockContent.bind(this));
+      this._initialiseDevelopmentData();
     }
     else if (RUNNING_MODE === RunningMode.HOSTED) {
       window.addEventListener("message", this._handleParentMessage.bind(this));
       parent.postMessage({ eventType: "load" }, "*");
     }
+    this._restoreState();
+  }
+
+  private _getSavedStateKey() {
+    return "ordamo-sdk-content-" + document.location.pathname;
   }
 
   /**
    * This must be called once only after the app has rendered itself
    * and it is safe to display. The app will be hidden until this is
    */
-  notifyAppIsReady() {
+  notifyAppIsReady(): void {
     if (!this._initMessage) {
       throw new Error("Illegal call to notifyAppIsReady() before init callback has fired.");
     }
@@ -97,63 +137,48 @@ export class OrdamoSDK<T> {
     }
   }
 
-  /**
-   * Return a list of the file objects provided with this app's content
-   */
-  getFiles(): SDKFile[] {
-    this._checkContentLoaded();
-    return this._content.files as SDKFile[];
+  getContent(): T {
+    this._requireInitMessage();
+    return this._initMessage.content;
+  }
+
+  getLayout(): Layout {
+    this._requireInitMessage();
+    return this._initMessage.layout;
   }
 
   /**
-   * Return a list of the file objects provided with this app's content.
+   * Return the saved state as created by the saveStateCallback constructor option last
+   * time the application quit.
    * 
-   * If the id does not exist, log an error and return an empty file. This behaviour
-   * allows missing images to result in visual defects rather than application crashes.
+   * WARNING: restoring saved state is a common source of application errors, especially
+   * just after an application update when the saved state was created by the previous
+   * version of the application. Validate that the state meets your expectations and wrap
+   * your restoration code in a try/catch block.
    */
-  getFile(id: string): SDKFile {
-    this._checkContentLoaded();
-    if (this._filesById[id]) {
-      return this._filesById[id];
-    } else {
-      console.error(`File "${id}" does not exist, returning an empty file.`);
-      return {
-        id: id,
-        data: EMPTY_DATA_URI
-      };
-    }
-  }
-
-  /**
-   * Return a list of the file objects provided with this app's content
-   */
-  getData(): T {
-    this._checkContentLoaded();
-    return this._content.data;
-  }
-
-  /**
-   * Return the init message provided by the host applicatio, which includes
-   * layout information
-   */
-  getInitMessage(): SDKInitMessage {
-    this._checkContentLoaded();
-    return JSON.parse(JSON.stringify(this._initMessage));
+  getSavedState() {
+    this._requireInitMessage();
+    return this._savedState;
   }
 
   /**
    * Request that the host application closes this app and returns to the default app.
    */
-  requestAppClose() {
+  requestAppClose(): void {
+    this._requireInitMessage();
     if (RUNNING_MODE === RunningMode.HOSTED) {
       parent.postMessage({ eventType: "close" }, "*");
     } else if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
       document.body.style.transition = "opacity 1s, visibility 0s linear 1s";
       document.body.style.opacity = "0";
       document.body.style.visibility = "hidden";
-      console.log("The app has been closed. In a hosted application, the user would now be seeing the main menu.");
+      logNotice("The app has been closed. In a hosted application, the user would now be seeing the main menu.");
+    }
+    if (this._options.saveStateCallback) {
+      this._saveState();
     }
   }
+
 
   /**
    * Set a "font-size: XXXpx" style property on the root element of the document (i.e. <html>)
@@ -166,9 +191,9 @@ export class OrdamoSDK<T> {
    * This allows you to create a plate spot UI that scales perfectly to the actual
    * plate spot size, and is more reliable than using a CSS transform for scaling.
    */
-  setRemUnitDiameterOfPlateSpot(plateSpotRemWidth: number) {
-    this._checkContentLoaded();
-    let plateSpot = this._initMessage.plateSpots[0];
+  setRemUnitDiameterOfPlateSpot(plateSpotRemWidth: number): void {
+    this._requireInitMessage();
+    let plateSpot = this._initMessage.layout.plateSpots[0];
     if (plateSpot) {
       document.documentElement.style.fontSize = (plateSpot.radius * 2 / plateSpotRemWidth) + "px";
     }
@@ -180,7 +205,7 @@ export class OrdamoSDK<T> {
   //
 
   private _handleParentMessage(event: MessageEvent) {
-    let message = event.data as SDKMessage;
+    let message = event.data as Message;
     if (message.eventType === "init") {
       if (this._initMessage) {
         console.error("Second init message sent, ignoring");
@@ -190,81 +215,276 @@ export class OrdamoSDK<T> {
           // compatibility with older API servers that called "plateSpots" "shapes"
           duckMessage.plateSpots = duckMessage.shapes;
         }
-        this._initMessage = message as SDKInitMessage;
-        this._acceptContent(this._providedContent || { files: [], data: null });
-        this._initAppCallback();
+        this._receiveInitMessage(message as InitMessage<T>);
       }
     }
 
     if (message.eventType === "navigate" && this.onNavigate) {
-      this.onNavigate((message as SDKNavigateMessage).navigateButtonId);
+      this.onNavigate((message as NavigateMessage).navigateButtonId);
     }
   }
 
-  public loadMockContentFile(successCallback: (content: SDKContent<T>) => void, failureCallback?: () => void) {
-    if (this._providedContent) {
-      setTimeout(() => successCallback(this._providedContent), 1);
-    } else {
-      const MOCK_CONTENT_FILE = "mockcontent.json";
-      let xhr = new XMLHttpRequest();
-      xhr.open("GET", MOCK_CONTENT_FILE, true);
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-          if (xhr.status === 200) {
-            let mockContent: any;
-            try {
-              mockContent = JSON.parse(xhr.responseText);
-            } catch (e) {
-              console.error(`${MOCK_CONTENT_FILE} is not a valid JSON file, check the console for more info`);
-              console.error(e);
-              console.log(xhr.responseText);
-            }
-            successCallback(mockContent);
+  private _initialiseDevelopmentData() {
+    const DEFAULT_CONTENT_FILE = "default-content.json";
+    let xhr = new XMLHttpRequest();
+    xhr.open("GET", DEFAULT_CONTENT_FILE, true);
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          let content: any;
+          try {
+            content = JSON.parse(xhr.responseText);
+          } catch (e) {
+            console.error(`${DEFAULT_CONTENT_FILE} is not a valid JSON file, check the console for more info`);
+            console.error(e);
+            logNotice("This content is not JSON", xhr.responseText);
           }
-          else {
-            if (failureCallback) {
-              failureCallback();
-            } else {
-              console.error(`Failed to load "${MOCK_CONTENT_FILE}", is the development server running (npm start)`);
-            }
+          if (content) {
+            this._receiveInitMessage({
+              eventType: "init",
+              content: content,
+              layout: makeMockLayout()
+            });
+            const TIMEOUT_SECONDS = 5;
+            setTimeout(() => {
+              if (!this._sentReadyEvent) {
+                console.error(`WARNING: this app is taking too long to be ready. It should render in less than ${TIMEOUT_SECONDS} seconds then call notifyAppIsReady().`);
+              }
+            }, TIMEOUT_SECONDS * 1000);
           }
         }
-      };
-      xhr.send();
-    }
-  }
-
-  private _acceptMockContent(mockContent: SDKContent<T>) {
-    if (this._content) {
-      throw new Error("Mock data file already loaded.");
-    }
-    this._acceptContent(mockContent);
-    this._initMessage = makeMockInitMessage();
-    const seconds = 5;
-    setTimeout(() => {
-      if (!this._sentReadyEvent) {
-        console.error(`WARNING: this app is taking too long to be ready. It should call notifyAppIsReady() as soon as it is rendered.`);
+        else {
+          console.error(`Failed to load "${DEFAULT_CONTENT_FILE}", is the development server running (npm start)`);
+        }
       }
-    }, seconds * 1000);
-    this._initAppCallback();
+    };
+    xhr.send();
   }
 
-  private _checkContentLoaded() {
-    if (!this._content) {
-      throw new Error("Content has not been loaded yet.");
+  private _requireInitMessage() {
+    if (!this._initMessage) {
+      throw new Error("The SDK has not initialised yet.");
     }
   }
 
-  private _acceptContent(content: SDKContent<T>) {
-    this._content = content;
-    this._filesById = {};
-    for (let file of this._content.files) {
-      this._filesById[file.id] = file;
+  private _receiveInitMessage(message: InitMessage<T>): void {
+    if (this._initMessage) {
+      logError("Duplicate init message received, ignoring");
+      return;
     }
+    this._initMessage = message;
+    if (this._options.initCallback) {
+      this._options.initCallback();
+    }
+  }
+
+  private _saveState() {
+    if (this._options.saveStateCallback) {
+      let storedForm: StoredState = {
+        timestamp: Date.now(),
+        state: this._options.saveStateCallback()
+      };
+      sessionStorage.setItem(this._getSavedStateKey(), JSON.stringify(storedForm));
+    }
+  }
+
+  private _restoreState() {
+    let storedForm = sessionStorage.getItem(this._getSavedStateKey());
+    if (storedForm) {
+      try {
+        let save: StoredState = JSON.parse(storedForm);
+        if (Date.now() - save.timestamp < MAX_SAVED_STATE_SECONDS * 1000) {
+          this._savedState = save.state;
+        } else {
+          logNotice(`Ignoring saved state older than ${MAX_SAVED_STATE_SECONDS} seconds.`);
+          this._clearState();
+        }
+      } catch (e) {
+        console.error("Error parsing save data, wiping saved state", e, storedForm);
+        this._clearState();
+      }
+    }
+  }
+
+  private _clearState() {
+    sessionStorage.removeItem(this._getSavedStateKey());
   }
 }
 
-function makeMockInitMessage(): SDKInitMessage {
+function logError(message: string) {
+  if (RUNNING_MODE === RunningMode.HOSTED) {
+    console.error(message);
+  } else {
+    throw new Error(message);
+  }
+}
+
+interface StoredState {
+  state: string;
+  timestamp: number;
+}
+
+//
+// CONTENT TYPES
+//
+
+export interface ContentOptions {
+  // A short name for the field in the CMS, e.g. "Greeting message"
+  fieldName: string;
+  // An optional longer description of the field shown to users if they need more information,
+  // e.g. "The message shown to users when they first open the app"
+  helpText?: string;
+}
+
+/**
+ * A specification for a bit of content that is to be provided to the
+ * app by the CMS
+ */
+export interface ContentDescriptor<T> {
+  // the type of this object, formed by taking the lowercase interface name
+  // minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
+  type: string;
+  // The value provided by the CMS. 
+  value?: T;
+}
+
+export interface ImageOptions extends ContentOptions {
+  // minumum width of the image in pixels
+  minWidth: number;
+  // maximum width of the image in pixels
+  maxWidth: number;
+  // minumum height of the image in pixels
+  minHeight: number;
+  // maximum height of the image in pixels
+  maxHeight: number;
+  // an optional aspect ratio to constrain the image to
+  aspectRatio?: number;
+}
+
+export interface ImageDescriptor extends ContentDescriptor<string> {
+  options: ImageOptions;
+}
+
+/**
+ * Helper function for defining content managed images.
+ * 
+ * This function is typed `string` mecause that's what will be provided by the CMS. However
+ * it actually returns an ImageDescriptor object containing instructions for the CMS.
+ */
+export function image(options: ImageOptions): string {
+  let descriptor: ImageDescriptor = {
+    type: "image",
+    options: options
+  };
+  return descriptor as any;
+}
+
+export interface ListOptions<T> {
+  // the inclusive minumum number of items in the list
+  min: number;
+  // the inclusive maximum number of items in the list, 
+  max: number;
+  // a content descriptor for individual items, e.g. as created by sdk.image()
+  items: T;
+}
+
+export interface ListDescriptor<T> extends ContentDescriptor<T[]> {
+  min: number;
+  max: number;
+  items: ContentDescriptor<T>;
+}
+
+/**
+ * Helper function for defining lists of content managed items.
+ * 
+ * This function is typed `T[]` where `T` is e.g. `string` in the case of images, because
+ * that's what will be provided by the CMS. However it actually returns an ListDescriptor
+ * object containing instructions for the CMS.
+ */
+export function list<T>(options: ListOptions<T>): T[] {
+  let itemDescriptor: ContentDescriptor<T> = options.items as any;
+  if (typeof itemDescriptor.type !== "string") {
+    throw new Error("items must be a content descriptor, e.g. as returned by sdk.image()");
+  }
+  let descriptor: ListDescriptor<T> = {
+    type: "list",
+    min: options.min,
+    max: options.max,
+    items: itemDescriptor
+  };
+  return descriptor as any;
+}
+
+
+//
+// MESSAGE TYPES
+//
+
+export interface Message {
+  eventType: string;
+}
+
+export interface InitMessage<T> extends Message {
+  content: T;
+  layout: Layout;
+}
+
+export interface Layout {
+  plateSpots: Circle[];
+  widthPx: number;
+  heightPx: number;
+  resolutionPixelsPerCm: number;
+  contentAreas: Rectangle[];
+}
+
+export interface Shape {
+  type: string;
+}
+
+export interface Circle extends Shape {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  borderWidth: number;
+  rotationDegrees: number;
+}
+
+export interface Rectangle extends Shape {
+  id: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotationDegrees: number;
+}
+
+export interface InteractionsMessage extends Message {
+  interactions: InteractionPoint[];
+}
+
+export interface InteractionPoint {
+  id: number;
+  phase: string;
+  x: number;
+  y: number;
+}
+
+export interface NavigateMessage extends Message {
+  navigateButtonId: string;
+}
+
+
+//
+// DEVELOPMENT UTILITIES
+//
+
+function logNotice(message: string, ...additional: any[]) {
+  console.log(`Ordamo SDK: ${message}`, ...additional);
+}
+
+
+function makeMockLayout(): Layout {
   let queryParams: { [key: string]: number } = {};
   document.location.href.replace(/[?&]([^=]+)=([^&]*)?/g, (match, name, value) => queryParams[name] = parseInt(value) as any);
 
@@ -275,23 +495,23 @@ function makeMockInitMessage(): SDKInitMessage {
 
   const numPlateSpots = isNaN(queryParams["plateSpots"]) ? 2 : queryParams["plateSpots"],
     numContentAreas = isNaN(queryParams["contentAreas"]) ? 1 : queryParams["contentAreas"],
+    clearCentreSpace = queryParams["avoidCentre"] ? 1 : 0,
     width = window.innerWidth,
     height = window.innerHeight,
     padding = 20,
-    columns = Math.min(3, numPlateSpots + numContentAreas),
-    rows = Math.ceil((numPlateSpots + numContentAreas) / columns),
+    columns = Math.min(3, numPlateSpots + numContentAreas + clearCentreSpace),
+    rows = Math.ceil((numPlateSpots + numContentAreas + clearCentreSpace) / columns),
     radius = Math.min((width - padding * (columns + 1)) / columns, (height - padding * (rows + 1)) / rows) / 2,
     size = padding + radius * 2;
 
-  console.log(`Making mock layout with ${numPlateSpots} plate spots and ${numContentAreas} content areas. Control the layout with URL parameters like so: ?plateSpots=4&contentAreas=2&rotation=0`);
+  logNotice(`Making mock layout with ${numPlateSpots} plate spots and ${numContentAreas} content areas${clearCentreSpace ? " and keeping the centre clear" : ""}. Control the layout with URL parameters like so: ?plateSpots=4&contentAreas=2&rotation=0&avoidCentre=1`);
 
-  let item = 0, column = 0, row = 0, x = 0, y = 0, rotation = queryParams["rotation"];
+  let item = 0, itemOffset = 0, column = 0, row = 0, x = 0, y = 0, rotation = queryParams["rotation"];
   return {
-    "eventType": "init",
     "widthPx": width,
     "heightPx": width,
     "resolutionPixelsPerCm": 12,
-    "plateSpots": layout(numPlateSpots, (): SDKCircle => {
+    "plateSpots": flowLayout(numPlateSpots, (): Circle => {
       return {
         "type": "circle",
         "id": item,
@@ -302,7 +522,7 @@ function makeMockInitMessage(): SDKInitMessage {
         "borderWidth": radius / 10
       };
     }),
-    "contentAreas": layout(numContentAreas, (): SDKRectangle => {
+    "contentAreas": flowLayout(numContentAreas, (): Rectangle => {
       return {
         "type": "rectangle",
         "id": item,
@@ -314,85 +534,119 @@ function makeMockInitMessage(): SDKInitMessage {
       };
     })
   };
-  function layout<T>(n: number, f: () => T): T[] {
-    let results: T[] = [];
-    for (let i = 0; i < n; i++) {
-      x = padding + radius + size * (item % columns);
-      y = padding + radius + size * Math.floor(item / columns);
+  function flowLayout<I>(itemCount: number, itemFactory: () => I): I[] {
+    let results: I[] = [];
+    for (let i = 0; i < itemCount; i++) {
+      computeXY();
+      if (clearCentreSpace) {
+        let dx = (window.innerWidth / 2 - x);
+        let dy = (window.innerHeight / 2 - y);
+        let centreDistance = Math.sqrt(dx * dx + dy * dy);
+        if (centreDistance < radius) {
+          itemOffset++;
+          computeXY();
+        }
+      }
       if (isNaN(queryParams["rotation"])) {
         rotation = item * 90;
       }
-      results.push(f());
+      results.push(itemFactory());
       item++;
     }
     return results;
   }
+  function computeXY() {
+    x = padding + radius + size * ((item + itemOffset) % columns);
+    y = padding + radius + size * Math.floor((item + itemOffset) / columns);
+  }
+
 }
 
 
+/**
+ * Supresses mouse events and convert them to touch events
+ */
+function startTouchEmulation() {
 
-export interface SDKContent<T> {
-  data: T;
-  files: SDKFile[];
-}
+  let currentElement: HTMLElement;
+  let hasNativeTouchEvents = false;
 
-export interface SDKFile {
-  /**
-   * A string unique within the scope of the currently loaded content
-   */
-  id: string;
+  window.addEventListener("touchstart", checkForNativeEvent, true);
 
-  /**
-   * A data URI with file type and content, e.g. data:image/jpeg;base64,/9j/4A
-   */
-  data: string;
-}
+  window.addEventListener("mousedown", handleMouseEvent("touchstart"), true);
+  window.addEventListener("mousemove", handleMouseEvent("touchmove"), true);
+  window.addEventListener("mouseup", handleMouseEvent("touchend"), true);
 
-export interface SDKMessage {
-  eventType: string;
-}
+  window.addEventListener("click", killEventDead, true);
+  window.addEventListener("mouseenter", killEventDead, true);
+  window.addEventListener("mouseleave", killEventDead, true);
+  window.addEventListener("mouseout", killEventDead, true);
+  window.addEventListener("mouseover", killEventDead, true);
 
-export interface SDKInitMessage extends SDKMessage {
-  plateSpots: SDKCircle[];
-  widthPx: number;
-  heightPx: number;
-  resolutionPixelsPerCm: number;
-  contentAreas: SDKRectangle[];
-}
+  function killEventDead(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 
-export interface SDKShape {
-  type: string;
-}
+  function handleMouseEvent(touchType: string) {
+    return function (mouseEvent: MouseEvent) {
 
-export interface SDKCircle extends SDKShape {
-  id: number;
-  x: number;
-  y: number;
-  radius: number;
-  borderWidth: number;
-  rotationDegrees: number;
-}
+      if ((mouseEvent.target as HTMLElement).nodeName !== "INPUT") {  // messing with native events on inputs breaks them
 
-export interface SDKRectangle extends SDKShape {
-  id: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  rotationDegrees: number;
-}
+        killEventDead(mouseEvent);
 
-export interface SDKInteractionsMessage extends SDKMessage {
-  interactions: SDKInteractionPoint[];
-}
+        if (mouseEvent.button !== 0 || hasNativeTouchEvents) {
+          return;
+        }
 
-export interface SDKInteractionPoint {
-  id: number;
-  phase: string;
-  x: number;
-  y: number;
-}
+        if (mouseEvent.type === "mousedown") {
+          currentElement = mouseEvent.target as HTMLElement;
+          if (currentElement.nodeType !== Node.ELEMENT_NODE) {
+            currentElement = currentElement.parentElement;
+          }
+        }
 
-export interface SDKNavigateMessage extends SDKMessage {
-  navigateButtonId: string;
+        if (!currentElement) {
+          return;
+        }
+
+        let touch = new (Touch as any)({
+          identifier: 1,
+          target: currentElement,
+          clientX: mouseEvent.clientX,
+          clientY: mouseEvent.clientY,
+          pageX: mouseEvent.pageX,
+          pageXY: mouseEvent.pageY,
+          screenX: mouseEvent.screenX,
+          screenY: mouseEvent.screenY,
+        });
+
+        let touchEvent = new (TouchEvent as any)(touchType, {
+          touches: mouseEvent.type === "mouseup" ? [] : [touch],
+          targetTouches: mouseEvent.type === "mouseup" ? [] : [touch],
+          changedTouches: [touch],
+          ctrlKey: mouseEvent.ctrlKey,
+          shiftKey: mouseEvent.shiftKey,
+          altKey: mouseEvent.altKey,
+          metaKey: mouseEvent.metaKey,
+          bubbles: true,
+          cancelable: true
+        });
+
+        currentElement.dispatchEvent(touchEvent);
+
+      }
+
+      if (mouseEvent.type === "mouseup") {
+        currentElement = null;
+      }
+    };
+  }
+
+  function checkForNativeEvent(e: TouchEvent) {
+    if (e.isTrusted) {
+      window.removeEventListener("touchstart", checkForNativeEvent, true);
+      hasNativeTouchEvents = true;
+    }
+  }
 }

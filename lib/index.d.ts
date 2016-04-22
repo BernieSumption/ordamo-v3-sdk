@@ -18,54 +18,70 @@ export declare const enum RunningMode {
  * Return the SDK running mode, useful for distinguishing between test and live
  */
 export declare function getRunningMode(): RunningMode;
+export interface OrdamoSDKOptions<T> {
+    /**
+     * Required. A description of the content requirements of this SDK applicaiton,
+     * created using the sdk content functions e.g. {myImage: sdk.image(...)}
+     */
+    contentSchema: T;
+    /**
+     * Required. A function to be called when data loading is complete and the
+     * app may begin rendering itself based on the layout and content.
+     */
+    initCallback: () => void;
+    /**
+     * An optional function to save the current state of the application. If provided, the
+     * result of calling this function will be available through sdkInstance.getSavedState()
+     * next time the application is launched, if it is still in use by the same users(s).
+     */
+    saveStateCallback?: () => any;
+    /**
+     * The V3 is a touch environment and mouse events will not work in production.
+     * By default, the SDK detects attempts to use mouse events and throws an exception
+     * allowing this error to be caught early. However if you are using a 3rd party
+     * library that attaches mouse event listeners, you may want to permit them here.
+     *
+     * Note that they still won't work in production, this simply surpresses the error.
+     */
+    allowedMouseEventListeners?: boolean;
+}
 /**
  * The main class of the SDK. Your app is responsible for creating a single instance.
  */
 export declare class OrdamoSDK<T> {
-    private _initAppCallback;
-    private _providedContent;
+    private _options;
     onNavigate: (event: string) => void;
-    private _content;
-    private _filesById;
     private _initMessage;
     private _sentReadyEvent;
+    private _savedState;
     /**
      * When the OrdamoSDK instance is created it will communicate with the host application to
      * request the app's layout and content (or in development mode, use a mock layout and
-     * load content from mockcontent.json).
+     * load content from default-content.json).
      *
-     * @param _initAppCallback a function to be called when data loading is complete and the
-     *        app may begin rendering itself based on the layout and content.
+     * @param _contentSchema
      *
-     * @param content If provided, the SDK will use this object as content instead of loading
-     *        content from the host application.
+     * @param _initAppCallback
      */
-    constructor(_initAppCallback?: Function, _providedContent?: SDKContent<T>);
+    constructor(_options: OrdamoSDKOptions<T>);
+    private _getSavedStateKey();
     /**
      * This must be called once only after the app has rendered itself
      * and it is safe to display. The app will be hidden until this is
      */
     notifyAppIsReady(): void;
+    getContent(): T;
+    getLayout(): Layout;
     /**
-     * Return a list of the file objects provided with this app's content
-     */
-    getFiles(): SDKFile[];
-    /**
-     * Return a list of the file objects provided with this app's content.
+     * Return the saved state as created by the saveStateCallback constructor option last
+     * time the application quit.
      *
-     * If the id does not exist, log an error and return an empty file. This behaviour
-     * allows missing images to result in visual defects rather than application crashes.
+     * WARNING: restoring saved state is a common source of application errors, especially
+     * just after an application update when the saved state was created by the previous
+     * version of the application. Validate that the state meets your expectations and wrap
+     * your restoration code in a try/catch block.
      */
-    getFile(id: string): SDKFile;
-    /**
-     * Return a list of the file objects provided with this app's content
-     */
-    getData(): T;
-    /**
-     * Return the init message provided by the host applicatio, which includes
-     * layout information
-     */
-    getInitMessage(): SDKInitMessage;
+    getSavedState(): any;
     /**
      * Request that the host application closes this app and returns to the default app.
      */
@@ -83,39 +99,78 @@ export declare class OrdamoSDK<T> {
      */
     setRemUnitDiameterOfPlateSpot(plateSpotRemWidth: number): void;
     private _handleParentMessage(event);
-    loadMockContentFile(successCallback: (content: SDKContent<T>) => void, failureCallback?: () => void): void;
-    private _acceptMockContent(mockContent);
-    private _checkContentLoaded();
-    private _acceptContent(content);
+    private _initialiseDevelopmentData();
+    private _requireInitMessage();
+    private _receiveInitMessage(message);
+    private _saveState();
+    private _restoreState();
+    private _clearState();
 }
-export interface SDKContent<T> {
-    data: T;
-    files: SDKFile[];
+export interface ContentOptions {
+    fieldName: string;
+    helpText?: string;
 }
-export interface SDKFile {
-    /**
-     * A string unique within the scope of the currently loaded content
-     */
-    id: string;
-    /**
-     * A data URI with file type and content, e.g. data:image/jpeg;base64,/9j/4A
-     */
-    data: string;
+/**
+ * A specification for a bit of content that is to be provided to the
+ * app by the CMS
+ */
+export interface ContentDescriptor<T> {
+    type: string;
+    value?: T;
 }
-export interface SDKMessage {
+export interface ImageOptions extends ContentOptions {
+    minWidth: number;
+    maxWidth: number;
+    minHeight: number;
+    maxHeight: number;
+    aspectRatio?: number;
+}
+export interface ImageDescriptor extends ContentDescriptor<string> {
+    options: ImageOptions;
+}
+/**
+ * Helper function for defining content managed images.
+ *
+ * This function is typed `string` mecause that's what will be provided by the CMS. However
+ * it actually returns an ImageDescriptor object containing instructions for the CMS.
+ */
+export declare function image(options: ImageOptions): string;
+export interface ListOptions<T> {
+    min: number;
+    max: number;
+    items: T;
+}
+export interface ListDescriptor<T> extends ContentDescriptor<T[]> {
+    min: number;
+    max: number;
+    items: ContentDescriptor<T>;
+}
+/**
+ * Helper function for defining lists of content managed items.
+ *
+ * This function is typed `T[]` where `T` is e.g. `string` in the case of images, because
+ * that's what will be provided by the CMS. However it actually returns an ListDescriptor
+ * object containing instructions for the CMS.
+ */
+export declare function list<T>(options: ListOptions<T>): T[];
+export interface Message {
     eventType: string;
 }
-export interface SDKInitMessage extends SDKMessage {
-    plateSpots: SDKCircle[];
+export interface InitMessage<T> extends Message {
+    content: T;
+    layout: Layout;
+}
+export interface Layout {
+    plateSpots: Circle[];
     widthPx: number;
     heightPx: number;
     resolutionPixelsPerCm: number;
-    contentAreas: SDKRectangle[];
+    contentAreas: Rectangle[];
 }
-export interface SDKShape {
+export interface Shape {
     type: string;
 }
-export interface SDKCircle extends SDKShape {
+export interface Circle extends Shape {
     id: number;
     x: number;
     y: number;
@@ -123,7 +178,7 @@ export interface SDKCircle extends SDKShape {
     borderWidth: number;
     rotationDegrees: number;
 }
-export interface SDKRectangle extends SDKShape {
+export interface Rectangle extends Shape {
     id: number;
     x: number;
     y: number;
@@ -131,15 +186,15 @@ export interface SDKRectangle extends SDKShape {
     height: number;
     rotationDegrees: number;
 }
-export interface SDKInteractionsMessage extends SDKMessage {
-    interactions: SDKInteractionPoint[];
+export interface InteractionsMessage extends Message {
+    interactions: InteractionPoint[];
 }
-export interface SDKInteractionPoint {
+export interface InteractionPoint {
     id: number;
     phase: string;
     x: number;
     y: number;
 }
-export interface SDKNavigateMessage extends SDKMessage {
+export interface NavigateMessage extends Message {
     navigateButtonId: string;
 }
