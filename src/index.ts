@@ -60,14 +60,13 @@ export interface OrdamoSDKOptions<T> {
   saveStateCallback?: () => any;
 
   /**
-   * The V3 is a touch environment and mouse events will not work in production.
-   * By default, the SDK detects attempts to use mouse events and throws an exception
-   * allowing this error to be caught early. However if you are using a 3rd party
-   * library that attaches mouse event listeners, you may want to permit them here.
+   * A content object. If absent, the behaviour of the system is to load content from
+   * "default-content.json" during development and to receive content form the application
+   * host during production.
    * 
-   * Note that they still won't work in production, this simply surpresses the error.
+   * Setting this option overrides the default content source with a specific object.
    */
-  allowedMouseEventListeners?: boolean;
+  contentOverride?: T;
 }
 
 /**
@@ -215,7 +214,11 @@ export class OrdamoSDK<T> {
           // compatibility with older API servers that called "plateSpots" "shapes"
           duckMessage.plateSpots = duckMessage.shapes;
         }
-        this._receiveInitMessage(message as InitMessage<T>);
+        let initMessage = message as InitMessage<T>;
+        if (this._options.contentOverride) {
+          initMessage.content = this._options.contentOverride;
+        }
+        this._receiveInitMessage(initMessage);
       }
     }
 
@@ -225,40 +228,48 @@ export class OrdamoSDK<T> {
   }
 
   private _initialiseDevelopmentData() {
-    const DEFAULT_CONTENT_FILE = "default-content.json";
-    let xhr = new XMLHttpRequest();
-    xhr.open("GET", DEFAULT_CONTENT_FILE, true);
-    xhr.onreadystatechange = () => {
-      if (xhr.readyState === 4) {
-        if (xhr.status === 200) {
-          let content: any;
-          try {
-            content = JSON.parse(xhr.responseText);
-          } catch (e) {
-            console.error(`${DEFAULT_CONTENT_FILE} is not a valid JSON file, check the console for more info`);
-            console.error(e);
-            logNotice("This content is not JSON", xhr.responseText);
+    if (this._options.contentOverride) {
+      setTimeout(() => this._receiveDevelopmentContent(this._options.contentOverride), 1);
+    } else {
+      const DEFAULT_CONTENT_FILE = "default-content.json";
+      let xhr = new XMLHttpRequest();
+      xhr.open("GET", DEFAULT_CONTENT_FILE, true);
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            let content: any;
+            try {
+              content = JSON.parse(xhr.responseText);
+            } catch (e) {
+              console.error(`${DEFAULT_CONTENT_FILE} is not a valid JSON file, check the console for more info`);
+              console.error(e);
+              logNotice("This content is not JSON", xhr.responseText);
+            }
+            if (content) {
+              this._receiveDevelopmentContent(content);
+              const TIMEOUT_SECONDS = 5;
+              setTimeout(() => {
+                if (!this._sentReadyEvent) {
+                  console.error(`WARNING: this app is taking too long to be ready. It should render in less than ${TIMEOUT_SECONDS} seconds then call notifyAppIsReady().`);
+                }
+              }, TIMEOUT_SECONDS * 1000);
+            }
           }
-          if (content) {
-            this._receiveInitMessage({
-              eventType: "init",
-              content: content,
-              layout: makeMockLayout()
-            });
-            const TIMEOUT_SECONDS = 5;
-            setTimeout(() => {
-              if (!this._sentReadyEvent) {
-                console.error(`WARNING: this app is taking too long to be ready. It should render in less than ${TIMEOUT_SECONDS} seconds then call notifyAppIsReady().`);
-              }
-            }, TIMEOUT_SECONDS * 1000);
+          else {
+            console.error(`Failed to load "${DEFAULT_CONTENT_FILE}", is the development server running (npm start)`);
           }
         }
-        else {
-          console.error(`Failed to load "${DEFAULT_CONTENT_FILE}", is the development server running (npm start)`);
-        }
-      }
-    };
-    xhr.send();
+      };
+      xhr.send();
+    }
+  }
+
+  private _receiveDevelopmentContent(content: T) {
+    this._receiveInitMessage({
+      eventType: "init",
+      content: content,
+      layout: makeMockLayout()
+    });
   }
 
   private _requireInitMessage() {

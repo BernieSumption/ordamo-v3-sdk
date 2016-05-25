@@ -36,14 +36,13 @@ export interface OrdamoSDKOptions<T> {
      */
     saveStateCallback?: () => any;
     /**
-     * The V3 is a touch environment and mouse events will not work in production.
-     * By default, the SDK detects attempts to use mouse events and throws an exception
-     * allowing this error to be caught early. However if you are using a 3rd party
-     * library that attaches mouse event listeners, you may want to permit them here.
+     * A content object. If absent, the behaviour of the system is to load content from
+     * "default-content.json" during development and to receive content form the application
+     * host during production.
      *
-     * Note that they still won't work in production, this simply surpresses the error.
+     * Setting this option overrides the default content source with a specific object.
      */
-    allowedMouseEventListeners?: boolean;
+    contentOverride?: T;
 }
 /**
  * The main class of the SDK. Your app is responsible for creating a single instance.
@@ -100,6 +99,7 @@ export declare class OrdamoSDK<T> {
     setRemUnitDiameterOfPlateSpot(plateSpotRemWidth: number): void;
     private _handleParentMessage(event);
     private _initialiseDevelopmentData();
+    private _receiveDevelopmentContent(content);
     private _requireInitMessage();
     private _receiveInitMessage(message);
     private _saveState();
