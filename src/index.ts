@@ -93,19 +93,18 @@ export class OrdamoSDK<T> {
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
       logNotice(`running in development mode.`);
 
-      logNotice("Emulating touch events.");
-      startTouchEmulation();
-
       let chromeVersion = /\bChrome\/(\d+)/.exec(navigator.userAgent);
       if (!(chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
         alert("Sorry, Ordamo V3 apps require a recent version of Google Chrome to run. Please load this app in Chrome, and/or ensure that your copy of Chrome is up to date.");
         throw new Error("Bad browser: " + navigator.userAgent);
       }
     }
+    
     if (INSTANCE_CREATED && RUNNING_MODE !== RunningMode.UNIT_TESTS) {
       throw new Error("Only one instance of OrdamoSDK may be created per application " + RUNNING_MODE);
     }
     INSTANCE_CREATED = true;
+    
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
       this._initialiseDevelopmentData();
     }
@@ -113,6 +112,11 @@ export class OrdamoSDK<T> {
       window.addEventListener("message", this._handleParentMessage.bind(this));
       parent.postMessage({ eventType: "load" }, "*");
     }
+    
+    if (RUNNING_MODE !== RunningMode.UNIT_TESTS) {
+      startTouchEmulation();
+    }
+    
     this._restoreState();
   }
 
@@ -209,12 +213,22 @@ export class OrdamoSDK<T> {
       if (this._initMessage) {
         console.error("Second init message sent, ignoring");
       } else {
-        let duckMessage = message as any;
-        if (duckMessage.shapes && !duckMessage.plateSpots) {
-          // compatibility with older API servers that called "plateSpots" "shapes"
-          duckMessage.plateSpots = duckMessage.shapes;
-        }
+        let legacyMessage = message as V1InitMessage;
         let initMessage = message as InitMessage<T>;
+        if (legacyMessage.shapes && !initMessage.layout) {
+          // compatibility with older API servers
+          initMessage = {
+            eventType: legacyMessage.eventType,
+            content: null,
+            layout: {
+              plateSpots: legacyMessage.shapes,
+              widthPx: legacyMessage.widthPx,
+              heightPx: legacyMessage.heightPx,
+              contentAreas: legacyMessage.contentAreas,
+              resolutionPixelsPerCm: legacyMessage.resolutionPixelsPerCm
+            }
+          };
+        }
         if (this._options.contentOverride) {
           initMessage.content = this._options.contentOverride;
         }
@@ -439,6 +453,15 @@ export interface InitMessage<T> extends Message {
   content: T;
   layout: Layout;
 }
+
+export interface V1InitMessage extends Message {
+  shapes: Circle[];
+  widthPx: number;
+  heightPx: number;
+  resolutionPixelsPerCm: number;
+  contentAreas: Rectangle[];
+}
+
 
 export interface Layout {
   plateSpots: Circle[];

@@ -1,6 +1,6 @@
 {
   "name": "ordamo-v3-sdk",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Software Development Kit for HTML/JS apps using the Ordamo V3 interactive projection system",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",

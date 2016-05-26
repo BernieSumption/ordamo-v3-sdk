@@ -160,6 +160,13 @@ export interface InitMessage<T> extends Message {
     content: T;
     layout: Layout;
 }
+export interface V1InitMessage extends Message {
+    shapes: Circle[];
+    widthPx: number;
+    heightPx: number;
+    resolutionPixelsPerCm: number;
+    contentAreas: Rectangle[];
+}
 export interface Layout {
     plateSpots: Circle[];
     widthPx: number;
