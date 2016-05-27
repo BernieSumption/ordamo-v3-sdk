@@ -36,21 +36,47 @@ export interface OrdamoSDKOptions<T> {
      */
     saveStateCallback?: () => any;
     /**
-     * A content object. If absent, the behaviour of the system is to load content from
-     * "default-content.json" during development and to receive content form the application
-     * host during production.
+     * A callback invoked when the user clicks on an icon in the app's nagivation menu
+     * (only relavent if the app defines a navigation menu in its metadata)
      *
-     * Setting this option overrides the default content source with a specific object.
+     * It is passed a NavigateMessage object containing a navigateButtonId string property
      */
-    contentOverride?: T;
+    onNavigate?: (navigate: NavigateMessage) => void;
+    /**
+     * If true, this app will be displayed in a focussed full screen iframe, covering the
+     * apphost and being capable of receiving native touch events. This means that the app
+     * must display a prominent "exit" button that calls the SDK requestAppClose() method.
+     *
+     * If false or absent, this app will be displayed under the apphost UI, with white fuzzyy
+     * circles (plate spots) superimposed over the locations of diners plates ensuring that
+     * patterns are not projected over food. The app will not receive focus, or native touch
+     * events, clicking it will bring up the apphost's navigation menu.
+     *
+     * In general, fullscreen apps are suitable for engaging experiences like games, and
+     * non-fulscreen apps are better for "tablecloth style"" experiences that can continue
+     * in the background while diners are eating.
+     */
+    fullscreen?: boolean;
+    /**
+     * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
+     * can use this to implement *basic* interactivity even in non-fulscreen apps.
+     *
+     * Bear in mind when using this that when users interact with the apphost they are using
+     * the apphost navigation menu, so the app shouldn't do anything distracting in response
+     * to these messages that will intefere with the use of the menu. The intention is that
+     * apps may use these messages to perform subtle background animations.
+     *
+     * It is passed a InteractionsMessage object containing an array of InteractionPoint objects
+     */
+    onInteractions?: (interactions: InteractionsMessage) => void;
 }
 /**
  * The main class of the SDK. Your app is responsible for creating a single instance.
  */
 export declare class OrdamoSDK<T> {
     private _options;
-    onNavigate: (event: string) => void;
     private _initMessage;
+    private _content;
     private _sentReadyEvent;
     private _savedState;
     /**
@@ -98,16 +124,19 @@ export declare class OrdamoSDK<T> {
      */
     setRemUnitDiameterOfPlateSpot(plateSpotRemWidth: number): void;
     private _handleParentMessage(event);
-    private _initialiseDevelopmentData();
-    private _receiveDevelopmentContent(content);
+    private _initialiseHostedMode();
+    private _sendParentMessage(message);
+    private _initialiseDevelopmentMode();
     private _requireInitMessage();
     private _receiveInitMessage(message);
+    private _finishInitialisation();
+    private _loadDefaultContentFile();
     private _saveState();
     private _restoreState();
     private _clearState();
 }
-export interface ContentOptions {
-    fieldName: string;
+export interface ContentFieldOptions {
+    title: string;
     helpText?: string;
 }
 /**
@@ -118,54 +147,86 @@ export interface ContentDescriptor<T> {
     type: string;
     value?: T;
 }
-export interface ImageOptions extends ContentOptions {
+export interface ImageOptions {
     minWidth: number;
     maxWidth: number;
     minHeight: number;
     maxHeight: number;
     aspectRatio?: number;
 }
-export interface ImageDescriptor extends ContentDescriptor<string> {
-    options: ImageOptions;
+export interface TextOptions {
+    minLength: number;
+    maxLength: number;
+    multiline: boolean;
+}
+export interface ListOptions<O> {
+    min: number;
+    max: number;
+    items: O;
 }
 /**
  * Helper function for defining content managed images.
- *
- * This function is typed `string` mecause that's what will be provided by the CMS. However
- * it actually returns an ImageDescriptor object containing instructions for the CMS.
  */
-export declare function image(options: ImageOptions): string;
-export interface ListOptions<T> {
-    min: number;
-    max: number;
-    items: T;
-}
-export interface ListDescriptor<T> extends ContentDescriptor<T[]> {
-    min: number;
-    max: number;
-    items: ContentDescriptor<T>;
-}
+export declare function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions & ContentFieldOptions;
 /**
- * Helper function for defining lists of content managed items.
- *
- * This function is typed `T[]` where `T` is e.g. `string` in the case of images, because
- * that's what will be provided by the CMS. However it actually returns an ListDescriptor
- * object containing instructions for the CMS.
+ * Helper function for defining content managed text strings.
  */
-export declare function list<T>(options: ListOptions<T>): T[];
+export declare function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions & ContentFieldOptions;
+/**
+ * Helper function for defining lists of content managed text strings.
+ */
+export declare function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions;
+/**
+ * Helper function for defining lists of content managed images.
+ */
+export declare function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> & ContentFieldOptions;
+/**
+ * Validate a content object against a schema.
+ *
+ * This function validates that the content has the right set of fields, but does
+ * not perform semantic validation e.g. checking that the lengths of strings are
+ * within the defined minLength and maxLength bounds.
+ */
+export declare function validateContent(schema: any, content: any): any;
+export interface AppMetadata {
+    id: string;
+    description: string;
+    version: string;
+    defaultIconSrc: string;
+    menuNodes?: MenuNode[];
+}
+export interface MenuNode {
+    iconSrc?: string;
+    children?: MenuNode[];
+    navigateButtonId?: string;
+    launchAppId?: string;
+    closeMenu?: boolean;
+}
 export interface Message {
     eventType: string;
 }
-export interface InitMessage<T> extends Message {
-    content: T;
-    layout: Layout;
+/**
+ * Sent from app to host to indicate that the app has loaded and is ready
+ * to receive the "init" message.
+ */
+export interface LoadMessage extends Message {
+    fullscreen: boolean;
 }
-export interface V1InitMessage extends Message {
-    shapes: Circle[];
-    widthPx: number;
-    heightPx: number;
-    resolutionPixelsPerCm: number;
-    contentAreas: Rectangle[];
+/**
+ * Sent from host to app with the information required by the app to render itself
+ */
+export interface InitMessage extends Message {
+    content: any;
+    layout: Layout;
+    /**
+     * The table label, e.g. "1" or "D" (the format depends on restaurant, but it
+     * will be short - 3 characters or less)
+     */
+    table: string;
+    /**
+     * The app's version as defined in its metadata file for deployment
+     */
+    version: string;
 }
 export interface Layout {
     plateSpots: Circle[];
@@ -193,6 +254,9 @@ export interface Rectangle extends Shape {
     height: number;
     rotationDegrees: number;
 }
+/**
+ * See OrdamoSDKOptions::onInteraction
+ */
 export interface InteractionsMessage extends Message {
     interactions: InteractionPoint[];
 }

@@ -1,5 +1,6 @@
 "use strict";
 
+
 export const enum RunningMode {
   /**
    * We are running in a browser inside a frame: assumed to mean that we're hosted
@@ -60,13 +61,41 @@ export interface OrdamoSDKOptions<T> {
   saveStateCallback?: () => any;
 
   /**
-   * A content object. If absent, the behaviour of the system is to load content from
-   * "default-content.json" during development and to receive content form the application
-   * host during production.
+   * A callback invoked when the user clicks on an icon in the app's nagivation menu
+   * (only relavent if the app defines a navigation menu in its metadata)
    * 
-   * Setting this option overrides the default content source with a specific object.
+   * It is passed a NavigateMessage object containing a navigateButtonId string property
    */
-  contentOverride?: T;
+  onNavigate?: (navigate: NavigateMessage) => void;
+
+  /**
+   * If true, this app will be displayed in a focussed full screen iframe, covering the
+   * apphost and being capable of receiving native touch events. This means that the app
+   * must display a prominent "exit" button that calls the SDK requestAppClose() method.
+   * 
+   * If false or absent, this app will be displayed under the apphost UI, with white fuzzyy
+   * circles (plate spots) superimposed over the locations of diners plates ensuring that
+   * patterns are not projected over food. The app will not receive focus, or native touch
+   * events, clicking it will bring up the apphost's navigation menu.
+   * 
+   * In general, fullscreen apps are suitable for engaging experiences like games, and
+   * non-fulscreen apps are better for "tablecloth style"" experiences that can continue
+   * in the background while diners are eating.
+   */
+  fullscreen?: boolean;
+
+  /**
+   * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
+   * can use this to implement *basic* interactivity even in non-fulscreen apps.
+   * 
+   * Bear in mind when using this that when users interact with the apphost they are using
+   * the apphost navigation menu, so the app shouldn't do anything distracting in response
+   * to these messages that will intefere with the use of the menu. The intention is that
+   * apps may use these messages to perform subtle background animations.
+   * 
+   * It is passed a InteractionsMessage object containing an array of InteractionPoint objects
+   */
+  onInteractions?: (interactions: InteractionsMessage) => void;
 }
 
 /**
@@ -74,9 +103,8 @@ export interface OrdamoSDKOptions<T> {
  */
 export class OrdamoSDK<T> {
 
-  public onNavigate: (event: string) => void;
-
-  private _initMessage: InitMessage<T>;
+  private _initMessage: InitMessage;
+  private _content: any;
   private _sentReadyEvent = false;
   private _savedState: any = null;
 
@@ -99,24 +127,24 @@ export class OrdamoSDK<T> {
         throw new Error("Bad browser: " + navigator.userAgent);
       }
     }
-    
+
     if (INSTANCE_CREATED && RUNNING_MODE !== RunningMode.UNIT_TESTS) {
       throw new Error("Only one instance of OrdamoSDK may be created per application " + RUNNING_MODE);
     }
     INSTANCE_CREATED = true;
-    
+
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
-      this._initialiseDevelopmentData();
+      this._initialiseDevelopmentMode();
     }
     else if (RUNNING_MODE === RunningMode.HOSTED) {
       window.addEventListener("message", this._handleParentMessage.bind(this));
-      parent.postMessage({ eventType: "load" }, "*");
+      this._initialiseHostedMode();
     }
-    
+
     if (RUNNING_MODE !== RunningMode.UNIT_TESTS) {
       startTouchEmulation();
     }
-    
+
     this._restoreState();
   }
 
@@ -135,14 +163,14 @@ export class OrdamoSDK<T> {
     if (!this._sentReadyEvent) {
       this._sentReadyEvent = true;
       if (RUNNING_MODE === RunningMode.HOSTED) {
-        parent.postMessage({ eventType: "ready" }, "*");
+        this._sendParentMessage({ eventType: "ready" });
       }
     }
   }
 
   getContent(): T {
     this._requireInitMessage();
-    return this._initMessage.content;
+    return this._content;
   }
 
   getLayout(): Layout {
@@ -170,7 +198,7 @@ export class OrdamoSDK<T> {
   requestAppClose(): void {
     this._requireInitMessage();
     if (RUNNING_MODE === RunningMode.HOSTED) {
-      parent.postMessage({ eventType: "close" }, "*");
+      this._sendParentMessage({ eventType: "close" });
     } else if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
       document.body.style.transition = "opacity 1s, visibility 0s linear 1s";
       document.body.style.opacity = "0";
@@ -213,77 +241,49 @@ export class OrdamoSDK<T> {
       if (this._initMessage) {
         console.error("Second init message sent, ignoring");
       } else {
-        let legacyMessage = message as V1InitMessage;
-        let initMessage = message as InitMessage<T>;
-        if (legacyMessage.shapes && !initMessage.layout) {
-          // compatibility with older API servers
-          initMessage = {
-            eventType: legacyMessage.eventType,
-            content: null,
-            layout: {
-              plateSpots: legacyMessage.shapes,
-              widthPx: legacyMessage.widthPx,
-              heightPx: legacyMessage.heightPx,
-              contentAreas: legacyMessage.contentAreas,
-              resolutionPixelsPerCm: legacyMessage.resolutionPixelsPerCm
-            }
-          };
-        }
-        if (this._options.contentOverride) {
-          initMessage.content = this._options.contentOverride;
-        }
-        this._receiveInitMessage(initMessage);
+        this._receiveInitMessage(message as InitMessage);
       }
     }
 
-    if (message.eventType === "navigate" && this.onNavigate) {
-      this.onNavigate((message as NavigateMessage).navigateButtonId);
+    if (message.eventType === "interactions" && this._options.onInteractions) {
+      this._options.onInteractions(message as InteractionsMessage);
+    }
+
+    if (message.eventType === "navigate" && this._options.onNavigate) {
+      this._options.onNavigate(message as NavigateMessage);
     }
   }
 
-  private _initialiseDevelopmentData() {
-    if (this._options.contentOverride) {
-      setTimeout(() => this._receiveDevelopmentContent(this._options.contentOverride), 1);
-    } else {
-      const DEFAULT_CONTENT_FILE = "default-content.json";
-      let xhr = new XMLHttpRequest();
-      xhr.open("GET", DEFAULT_CONTENT_FILE, true);
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-          if (xhr.status === 200) {
-            let content: any;
-            try {
-              content = JSON.parse(xhr.responseText);
-            } catch (e) {
-              console.error(`${DEFAULT_CONTENT_FILE} is not a valid JSON file, check the console for more info`);
-              console.error(e);
-              logNotice("This content is not JSON", xhr.responseText);
-            }
-            if (content) {
-              this._receiveDevelopmentContent(content);
-              const TIMEOUT_SECONDS = 5;
-              setTimeout(() => {
-                if (!this._sentReadyEvent) {
-                  console.error(`WARNING: this app is taking too long to be ready. It should render in less than ${TIMEOUT_SECONDS} seconds then call notifyAppIsReady().`);
-                }
-              }, TIMEOUT_SECONDS * 1000);
-            }
-          }
-          else {
-            console.error(`Failed to load "${DEFAULT_CONTENT_FILE}", is the development server running (npm start)`);
-          }
-        }
-      };
-      xhr.send();
+  private _initialiseHostedMode() {
+    let loadMessage: LoadMessage = {
+      eventType: "load",
+      fullscreen: !!this._options.fullscreen
     }
+    this._sendParentMessage(loadMessage);
   }
 
-  private _receiveDevelopmentContent(content: T) {
+  private _sendParentMessage(message: Message) {
+    parent.postMessage(message, "*");
+  }
+
+  private _initialiseDevelopmentMode() {
     this._receiveInitMessage({
       eventType: "init",
-      content: content,
-      layout: makeMockLayout()
+      content: null,
+      layout: makeMockLayout(),
+      table: "1",
+      version: `0.${Math.round(Math.random() * 99999)}-MOCKVERSION-SDK-DEVMODE`
     });
+
+    if (document.location.search.match(/\bmanualFullscreen=true/)) {
+      let goFullscreen = () => {
+        if (document.webkitFullscreenEnabled && !document.webkitFullscreenElement) {
+          document.body.webkitRequestFullScreen();
+        }
+      }
+      document.body.addEventListener("click", goFullscreen)
+      document.body.addEventListener("touchstart", goFullscreen)
+    }
   }
 
   private _requireInitMessage() {
@@ -292,15 +292,66 @@ export class OrdamoSDK<T> {
     }
   }
 
-  private _receiveInitMessage(message: InitMessage<T>): void {
+  private _receiveInitMessage(message: InitMessage): void {
     if (this._initMessage) {
       logError("Duplicate init message received, ignoring");
       return;
     }
     this._initMessage = message;
+    if (message.content) {
+      this._finishInitialisation();
+    } else {
+      this._loadDefaultContentFile();
+    }
+  }
+
+  private _finishInitialisation() {
+    
+    this._content = JSON.parse(JSON.stringify(this._options.contentSchema));
+    validateContent(this._options.contentSchema, this._initMessage.content);
+    for (let prop in this._content) {
+      this._content[prop].value = this._initMessage.content[prop];
+    }
+    
     if (this._options.initCallback) {
       this._options.initCallback();
     }
+    
+    
+    const TIMEOUT_SECONDS = 5;
+    setTimeout(() => {
+      if (!this._sentReadyEvent) {
+        console.error(`WARNING: this app is taking too long to be ready. It should render in less than ${TIMEOUT_SECONDS} seconds then call notifyAppIsReady().`);
+      }
+    }, TIMEOUT_SECONDS * 1000);
+  }
+
+  private _loadDefaultContentFile() {
+    const DEFAULT_CONTENT_FILE = `default-content.json?version=${encodeURIComponent(this._initMessage.version)}`;
+    let xhr = new XMLHttpRequest();
+    xhr.open("GET", DEFAULT_CONTENT_FILE, true);
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          let content: any;
+          try {
+            content = JSON.parse(xhr.responseText);
+          } catch (e) {
+            console.error(`${DEFAULT_CONTENT_FILE} is not a valid JSON file, check the console for more info`);
+            console.error(e);
+            logNotice("This content is not JSON", xhr.responseText);
+          }
+          if (content) {
+            this._initMessage.content = content;
+            this._finishInitialisation();
+          }
+        }
+        else {
+          console.error(`Failed to load "${DEFAULT_CONTENT_FILE}", is the development server running (npm start)`);
+        }
+      }
+    };
+    xhr.send();
   }
 
   private _saveState() {
@@ -353,9 +404,9 @@ interface StoredState {
 // CONTENT TYPES
 //
 
-export interface ContentOptions {
+export interface ContentFieldOptions {
   // A short name for the field in the CMS, e.g. "Greeting message"
-  fieldName: string;
+  title: string;
   // An optional longer description of the field shown to users if they need more information,
   // e.g. "The message shown to users when they first open the app"
   helpText?: string;
@@ -373,7 +424,7 @@ export interface ContentDescriptor<T> {
   value?: T;
 }
 
-export interface ImageOptions extends ContentOptions {
+export interface ImageOptions {
   // minumum width of the image in pixels
   minWidth: number;
   // maximum width of the image in pixels
@@ -386,60 +437,129 @@ export interface ImageOptions extends ContentOptions {
   aspectRatio?: number;
 }
 
-export interface ImageDescriptor extends ContentDescriptor<string> {
-  options: ImageOptions;
+export interface TextOptions {
+  // minumum number of characters in the text
+  minLength: number;
+  // maximum number of characters in the text
+  maxLength: number;
+  // whether newlines are permitted in the text
+  multiline: boolean;
 }
 
-/**
- * Helper function for defining content managed images.
- * 
- * This function is typed `string` mecause that's what will be provided by the CMS. However
- * it actually returns an ImageDescriptor object containing instructions for the CMS.
- */
-export function image(options: ImageOptions): string {
-  let descriptor: ImageDescriptor = {
-    type: "image",
-    options: options
-  };
-  return descriptor as any;
-}
-
-export interface ListOptions<T> {
+export interface ListOptions<O> {
   // the inclusive minumum number of items in the list
   min: number;
   // the inclusive maximum number of items in the list, 
   max: number;
-  // a content descriptor for individual items, e.g. as created by sdk.image()
-  items: T;
+  // an options object describing individual children
+  items: O;
 }
 
-export interface ListDescriptor<T> extends ContentDescriptor<T[]> {
-  min: number;
-  max: number;
-  items: ContentDescriptor<T>;
+
+/**
+ * Helper function for defining content managed images.
+ */
+export function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions & ContentFieldOptions {
+  return Object.assign({ type: "image" }, options);
 }
 
 /**
- * Helper function for defining lists of content managed items.
- * 
- * This function is typed `T[]` where `T` is e.g. `string` in the case of images, because
- * that's what will be provided by the CMS. However it actually returns an ListDescriptor
- * object containing instructions for the CMS.
+ * Helper function for defining content managed text strings.
  */
-export function list<T>(options: ListOptions<T>): T[] {
-  let itemDescriptor: ContentDescriptor<T> = options.items as any;
-  if (typeof itemDescriptor.type !== "string") {
-    throw new Error("items must be a content descriptor, e.g. as returned by sdk.image()");
-  }
-  let descriptor: ListDescriptor<T> = {
-    type: "list",
-    min: options.min,
-    max: options.max,
-    items: itemDescriptor
-  };
-  return descriptor as any;
+export function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions & ContentFieldOptions {
+  return Object.assign({ type: "text" }, options);
 }
 
+/**
+ * Helper function for defining lists of content managed text strings.
+ */
+export function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions {
+  options.items = Object.assign({ type: "text" }, options.items);
+  return Object.assign({ type: "list" }, options);
+}
+
+/**
+ * Helper function for defining lists of content managed images.
+ */
+export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> & ContentFieldOptions {
+  options.items = Object.assign({ type: "image" }, options.items);
+  return Object.assign({ type: "list" }, options);
+}
+
+/**
+ * Validate a content object against a schema.
+ * 
+ * This function validates that the content has the right set of fields, but does
+ * not perform semantic validation e.g. checking that the lengths of strings are
+ * within the defined minLength and maxLength bounds.
+ */
+export function validateContent(schema: any, content: any) {
+  for (let key in schema) {
+    if (!(key in content)) {
+      throw new Error(`Schema contains item "${key} that is missing from the content.`);
+    }
+    let schemaItem: ContentDescriptor<any> = schema[key];
+    if (schemaItem.type === "image" || schemaItem.type === "text") {
+      if (typeof content[key] !== "string") {
+        throw new Error(`Expected content.${key} to be a string, but it is a ${typeof content[key]}`);
+      }
+    }
+    if (schemaItem.type === "list") {
+      if (!Array.isArray(content[key])) {
+        throw new Error(`Expected content.${key} to be an array, but it is a ${typeof content[key]}`);
+      } else {
+        for (let item of content[key]) {
+          if (typeof item !== "string") {
+            throw new Error(`Expected content.${key} to be an array of strings, but it contains an item of type ${typeof item}`);
+          }
+        }
+      }
+    }
+  }
+  for (let key in content) {
+    if (!(key in schema)) {
+      throw new Error(`Content contains item "${key}" that doesn't exist in the schema.`);
+    }
+  }
+  return content;
+}
+
+//
+// METADATA
+//
+
+export interface AppMetadata {
+  // a unique app identifier - taken from the "name" in the app's package.json
+  id: string;
+  // a short human readable app description - taken from the "description" in the app's package.json
+  description: string;
+  // a semver app version - taken from the "version" in the app's package.json
+  version: string;
+  // a default icon used to launch the app, which may be changed in the CMS.
+  // A 250x250px png encoded as a data uri.
+  defaultIconSrc: string;
+  // icons to display below this app's icon in the apphost navigation menu.
+  menuNodes?: MenuNode[];
+}
+
+
+export interface MenuNode {
+  // An icon used for the menu node. THIS IS REQUIRED unless launchAppId is used, in which case
+  // it may be optionally ommitted and the app's default icon will be used in place.
+  // A 250x250px png encoded as a data uri.
+  iconSrc?: string;
+  // If present, clicking this menu item will open up a new level of items below it.
+  children?: MenuNode[];
+  // If present, clicking this menu item will cause the SDK's onNavigate callback to be
+  // fired with this string as an argument.
+  navigateButtonId?: string;
+  // If present, clicking this menu item will cause the app of the specified ID to be
+  // launched. WARNING: this is an advanced feature intended for use when several related
+  // apps are controlled by a single "master" app. Most app authors do not need to use it.
+  launchAppId?: string;
+  // If true, clicking this item will close the menu.
+  closeMenu?: boolean;
+}
 
 //
 // MESSAGE TYPES
@@ -449,17 +569,32 @@ export interface Message {
   eventType: string;
 }
 
-export interface InitMessage<T> extends Message {
-  content: T;
-  layout: Layout;
+/**
+ * Sent from app to host to indicate that the app has loaded and is ready
+ * to receive the "init" message.
+ */
+export interface LoadMessage extends Message {
+  // See OrdamoSDKOptions::fullscreen
+  fullscreen: boolean;
 }
 
-export interface V1InitMessage extends Message {
-  shapes: Circle[];
-  widthPx: number;
-  heightPx: number;
-  resolutionPixelsPerCm: number;
-  contentAreas: Rectangle[];
+/**
+ * Sent from host to app with the information required by the app to render itself
+ */
+export interface InitMessage extends Message {
+  content: any;
+  layout: Layout;
+
+  /**
+   * The table label, e.g. "1" or "D" (the format depends on restaurant, but it
+   * will be short - 3 characters or less)
+   */
+  table: string;
+
+  /**
+   * The app's version as defined in its metadata file for deployment
+   */
+  version: string;
 }
 
 
@@ -493,6 +628,9 @@ export interface Rectangle extends Shape {
   rotationDegrees: number;
 }
 
+/**
+ * See OrdamoSDKOptions::onInteraction
+ */
 export interface InteractionsMessage extends Message {
   interactions: InteractionPoint[];
 }

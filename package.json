@@ -1,6 +1,6 @@
 {
   "name": "ordamo-v3-sdk",
-  "version": "2.1.1",
+  "version": "3.0.0",
   "description": "Software Development Kit for HTML/JS apps using the Ordamo V3 interactive projection system",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -9,6 +9,9 @@
     "start": "tsc -p src --watch",
     "test": "tslint 'src/**/*.ts'"
   },
+  "bin": {
+    "ordamo-v3-sdk": "./lib/bin/cli.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/BernieSumption/ordamo-v3-sdk.git"
@@ -16,6 +19,7 @@
   "author": "Bernie Sumption <bernie@berniecode.com> (http://berniesumption.com/)",
   "license": "SEE LICENSE IN <LICENSE.txt>",
   "devDependencies": {
+    "retyped-node-tsd-ambient": "^1.5.3-0",
     "tslint": "^3.7.1",
     "typescript": "^1.8.9"
   }

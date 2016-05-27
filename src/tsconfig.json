@@ -5,5 +5,10 @@
         "noImplicitAny": true,
         "outDir": "../lib",
         "declaration": true
-    }
+    },
+    "files": [
+        "../node_modules/typescript/lib/lib.es6.d.ts",
+        "index.ts",
+        "bin/cli.ts"
+    ]
 }
