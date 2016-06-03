@@ -43,7 +43,7 @@ export function getRunningMode() {
 export interface OrdamoSDKOptions<T> {
   /**
    * Required. A description of the content requirements of this SDK applicaiton,
-   * created using the sdk content functions e.g. {myImage: sdk.image(...)} 
+   * created using the sdk content functions e.g. {myImage: sdk.image(...)}
    */
   contentSchema: T;
 
@@ -63,7 +63,7 @@ export interface OrdamoSDKOptions<T> {
   /**
    * A callback invoked when the user clicks on an icon in the app's nagivation menu
    * (only relavent if the app defines a navigation menu in its metadata)
-   * 
+   *
    * It is passed a NavigateMessage object containing a navigateButtonId string property
    */
   onNavigate?: (navigate: NavigateMessage) => void;
@@ -72,12 +72,12 @@ export interface OrdamoSDKOptions<T> {
    * If true, this app will be displayed in a focussed full screen iframe, covering the
    * apphost and being capable of receiving native touch events. This means that the app
    * must display a prominent "exit" button that calls the SDK requestAppClose() method.
-   * 
+   *
    * If false or absent, this app will be displayed under the apphost UI, with white fuzzyy
    * circles (plate spots) superimposed over the locations of diners plates ensuring that
    * patterns are not projected over food. The app will not receive focus, or native touch
    * events, clicking it will bring up the apphost's navigation menu.
-   * 
+   *
    * In general, fullscreen apps are suitable for engaging experiences like games, and
    * non-fulscreen apps are better for "tablecloth style"" experiences that can continue
    * in the background while diners are eating.
@@ -87,12 +87,12 @@ export interface OrdamoSDKOptions<T> {
   /**
    * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
    * can use this to implement *basic* interactivity even in non-fulscreen apps.
-   * 
+   *
    * Bear in mind when using this that when users interact with the apphost they are using
    * the apphost navigation menu, so the app shouldn't do anything distracting in response
    * to these messages that will intefere with the use of the menu. The intention is that
    * apps may use these messages to perform subtle background animations.
-   * 
+   *
    * It is passed a InteractionsMessage object containing an array of InteractionPoint objects
    */
   onInteractions?: (interactions: InteractionsMessage) => void;
@@ -112,10 +112,10 @@ export class OrdamoSDK<T> {
    * When the OrdamoSDK instance is created it will communicate with the host application to
    * request the app's layout and content (or in development mode, use a mock layout and
    * load content from default-content.json).
-   * 
-   * @param _contentSchema 
-   * 
-   * @param _initAppCallback 
+   *
+   * @param _contentSchema
+   *
+   * @param _initAppCallback
    */
   constructor(private _options: OrdamoSDKOptions<T>) {
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
@@ -181,7 +181,7 @@ export class OrdamoSDK<T> {
   /**
    * Return the saved state as created by the saveStateCallback constructor option last
    * time the application quit.
-   * 
+   *
    * WARNING: restoring saved state is a common source of application errors, especially
    * just after an application update when the saved state was created by the previous
    * version of the application. Validate that the state meets your expectations and wrap
@@ -214,11 +214,11 @@ export class OrdamoSDK<T> {
   /**
    * Set a "font-size: XXXpx" style property on the root element of the document (i.e. <html>)
    * so that the width of the plate spots are a known number of CSS rem units.
-   * 
+   *
    * For example, if your app graphic design has the plate spots at 500px wide, call
    * `setRemUnitDiameterOfPlateSpot(500) and then use "rem" units instead of "px",
    * e.g. "width: 250rem" to make an element half the width of the plate spot.
-   * 
+   *
    * This allows you to create a plate spot UI that scales perfectly to the actual
    * plate spot size, and is more reliable than using a CSS transform for scaling.
    */
@@ -258,7 +258,7 @@ export class OrdamoSDK<T> {
     let loadMessage: LoadMessage = {
       eventType: "load",
       fullscreen: !!this._options.fullscreen
-    }
+    };
     this._sendParentMessage(loadMessage);
   }
 
@@ -280,9 +280,9 @@ export class OrdamoSDK<T> {
         if (document.webkitFullscreenEnabled && !document.webkitFullscreenElement) {
           document.body.webkitRequestFullScreen();
         }
-      }
-      document.body.addEventListener("click", goFullscreen)
-      document.body.addEventListener("touchstart", goFullscreen)
+      };
+      document.body.addEventListener("click", goFullscreen);
+      document.body.addEventListener("touchstart", goFullscreen);
     }
   }
 
@@ -306,18 +306,18 @@ export class OrdamoSDK<T> {
   }
 
   private _finishInitialisation() {
-    
+
     this._content = JSON.parse(JSON.stringify(this._options.contentSchema));
     validateContent(this._options.contentSchema, this._initMessage.content);
     for (let prop in this._content) {
       this._content[prop].value = this._initMessage.content[prop];
     }
-    
+
     if (this._options.initCallback) {
       this._options.initCallback();
     }
-    
-    
+
+
     const TIMEOUT_SECONDS = 5;
     setTimeout(() => {
       if (!this._sentReadyEvent) {
@@ -417,41 +417,101 @@ export interface ContentFieldOptions {
  * app by the CMS
  */
 export interface ContentDescriptor<T> {
-  // the type of this object, formed by taking the lowercase interface name
-  // minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
+  /**
+   * The type of this object, formed by taking the lowercase interface name
+   * minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
+   */
   type: string;
-  // The value provided by the CMS. 
+  /**
+   * The value provided by the CMS.
+   */
   value?: T;
 }
 
 export interface ImageOptions {
-  // minumum width of the image in pixels
+  /**
+   * Minumum width of the image in pixels
+   */
   minWidth: number;
-  // maximum width of the image in pixels
+  /**
+   * Maximum width of the image in pixels
+   */
   maxWidth: number;
-  // minumum height of the image in pixels
+  /**
+   * Minumum height of the image in pixels
+   */
   minHeight: number;
-  // maximum height of the image in pixels
+  /**
+   * Maximum height of the image in pixels
+   */
   maxHeight: number;
-  // an optional aspect ratio to constrain the image to
+  /**
+   * An optional aspect ratio to constrain the image to
+   */
   aspectRatio?: number;
 }
 
 export interface TextOptions {
-  // minumum number of characters in the text
+  /**
+   * Minumum number of characters in the text
+   */
   minLength: number;
-  // maximum number of characters in the text
+  /**
+   * Maximum number of characters in the text
+   */
   maxLength: number;
-  // whether newlines are permitted in the text
+  /**
+   * Whether newlines are permitted in the text
+   */
   multiline: boolean;
+  /**
+   * Optional string structure validation
+   */
+  validation?: TextValidationOptions;
+}
+
+export interface NumberOptions {
+  /**
+   * Minumum number
+   */
+  minValue?: number;
+  /**
+   * Maximum number
+   */
+  maxValue?: number;
+  /**
+   * Whether the number must be a round number
+   */
+  integer: boolean;
+}
+
+export interface TextValidationOptions {
+  /**
+   * A regular expression to validate against, passed into the RegExp constructor. Normally, you
+   * want to use "^pattern$" to ensure that you match the whole string not just a substring.
+   */
+  regex: string;
+
+  /**
+   * Valid examples to use in the error message if a CMS user enters an invalid string, optionally
+   * multiple valid examples separated with commas as per english text, e.g. "£5, $10.0 or 8HKD"
+   * 
+   * The error message will read "The value you have entered is invalid, it should looke like ${examples}"
+   */
+  validExamples: string;
 }
 
 export interface ListOptions<O> {
-  // the inclusive minumum number of items in the list
+  /**
+   * The inclusive minumum number of items in the list
+   */
   min: number;
-  // the inclusive maximum number of items in the list, 
+  /**
+   * The inclusive maximum number of items in the list, */
   max: number;
-  // an options object describing individual children
+  /**
+   * An options object describing individual children
+   */
   items: O;
 }
 
@@ -471,6 +531,13 @@ export function text(options: TextOptions & ContentFieldOptions): ContentDescrip
 }
 
 /**
+ * Helper function for defining content managed numbers.
+ */
+export function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<string> & NumberOptions & ContentFieldOptions {
+  return Object.assign({ type: "number" }, options);
+}
+
+/**
  * Helper function for defining lists of content managed text strings.
  */
 export function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions {
@@ -487,8 +554,16 @@ export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptio
 }
 
 /**
+ * Helper function for defining lists of content managednumbersimages.
+ */
+export function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<NumberOptions> & ContentFieldOptions {
+  options.items = Object.assign({ type: "number" }, options.items);
+  return Object.assign({ type: "list" }, options);
+}
+
+/**
  * Validate a content object against a schema.
- * 
+ *
  * This function validates that the content has the right set of fields, but does
  * not perform semantic validation e.g. checking that the lengths of strings are
  * within the defined minLength and maxLength bounds.
@@ -498,20 +573,22 @@ export function validateContent(schema: any, content: any) {
     if (!(key in content)) {
       throw new Error(`Schema contains item "${key} that is missing from the content.`);
     }
-    let schemaItem: ContentDescriptor<any> = schema[key];
+    let schemaItem: ContentDescriptor<any> & ListOptions<any> = schema[key];
     if (schemaItem.type === "image" || schemaItem.type === "text") {
-      if (typeof content[key] !== "string") {
-        throw new Error(`Expected content.${key} to be a string, but it is a ${typeof content[key]}`);
-      }
+      validateType([content[key]], "string", "a string", key);
+    }
+    if (schemaItem.type === "number") {
+      validateType([content[key]], "number", "a number", key);
     }
     if (schemaItem.type === "list") {
       if (!Array.isArray(content[key])) {
         throw new Error(`Expected content.${key} to be an array, but it is a ${typeof content[key]}`);
       } else {
-        for (let item of content[key]) {
-          if (typeof item !== "string") {
-            throw new Error(`Expected content.${key} to be an array of strings, but it contains an item of type ${typeof item}`);
-          }
+        if (schemaItem.items.type === "image" || schemaItem.items.type === "text") {
+          validateType(content[key], "string", "an array of strings", key);
+        }
+        if (schemaItem.type === "number") {
+          validateType(content[key], "number", "an array of numbers", key);
         }
       }
     }
@@ -522,6 +599,14 @@ export function validateContent(schema: any, content: any) {
     }
   }
   return content;
+
+  function validateType(items: any[], expectedType: string, expectedTypeHuman: string, key: string) {
+    for (let item of items) {
+      if (typeof item !== expectedType) {
+        throw new Error(`Expected content.${key} to be ${expectedTypeHuman}, but it contains a ${typeof item}`);
+      }
+    }
+  }
 }
 
 //
@@ -529,35 +614,59 @@ export function validateContent(schema: any, content: any) {
 //
 
 export interface AppMetadata {
-  // a unique app identifier - taken from the "name" in the app's package.json
+  /**
+   * A unique app identifier - taken from the "name" in the app's package.json
+   */
   id: string;
-  // a short human readable app description - taken from the "description" in the app's package.json
+  /**
+   * A short human readable app description - taken from the "description" in the app's package.json
+   */
   description: string;
-  // a semver app version - taken from the "version" in the app's package.json
+  /**
+   * A semver app version - taken from the "version" in the app's package.json
+   */
   version: string;
-  // a default icon used to launch the app, which may be changed in the CMS.
-  // A 250x250px png encoded as a data uri.
+  /**
+   * A a default icon used to launch the app, which may be changed in the CMS.
+   * A 250x250px image encoded as a data uri.
+   */
   defaultIconSrc: string;
-  // icons to display below this app's icon in the apphost navigation menu.
+  /**
+   * Icons to display below this app's icon in the apphost navigation menu.
+   */
   menuNodes?: MenuNode[];
 }
 
 
 export interface MenuNode {
-  // An icon used for the menu node. THIS IS REQUIRED unless launchAppId is used, in which case
-  // it may be optionally ommitted and the app's default icon will be used in place.
-  // A 250x250px png encoded as a data uri.
+  /**
+   * An icon used for the menu node. THIS IS REQUIRED unless launchAppId is used, in which case
+   * it may be optionally ommitted and the app's default icon will be used in place.
+   * A 250x250px image encoded as a data uri.
+   */
   iconSrc?: string;
-  // If present, clicking this menu item will open up a new level of items below it.
+
+  /**
+   * If present, clicking this menu item will open up a new level of items below it.
+   */
   children?: MenuNode[];
-  // If present, clicking this menu item will cause the SDK's onNavigate callback to be
-  // fired with this string as an argument.
+
+  /**
+   * If present, clicking this menu item will cause the SDK's onNavigate callback to be
+   * fired with this string as an argument.
+   */
   navigateButtonId?: string;
-  // If present, clicking this menu item will cause the app of the specified ID to be
-  // launched. WARNING: this is an advanced feature intended for use when several related
-  // apps are controlled by a single "master" app. Most app authors do not need to use it.
+
+  /**
+   * If present, clicking this menu item will cause the app of the specified ID to be
+   * launched. WARNING: this is an advanced feature intended for use when several related
+   * apps are controlled by a single "master" app. Most app authors do not need to use it.
+   */
   launchAppId?: string;
-  // If true, clicking this item will close the menu.
+
+  /**
+   * If true, clicking this item will close the menu.
+   */
   closeMenu?: boolean;
 }
 
@@ -574,7 +683,9 @@ export interface Message {
  * to receive the "init" message.
  */
 export interface LoadMessage extends Message {
-  // See OrdamoSDKOptions::fullscreen
+  /**
+   * See OrdamoSDKOptions::fullscreen
+   */
   fullscreen: boolean;
 }
 
@@ -597,12 +708,22 @@ export interface InitMessage extends Message {
   version: string;
 }
 
-
+/**
+ * Describes the size of the table and the positions of diner places on it 
+ */
 export interface Layout {
+  /**
+   * The locations of diner places
+   */
   plateSpots: Circle[];
   widthPx: number;
   heightPx: number;
   resolutionPixelsPerCm: number;
+  /**
+   * "Safe areas" in which content such as images and videos can be rendered without being obscured
+   * by any other UI elements. All diners on the table will have one content area that is relatively
+   * close to them and rotated in their direction.
+   */
   contentAreas: Rectangle[];
 }
 

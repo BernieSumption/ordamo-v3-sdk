@@ -144,24 +144,95 @@ export interface ContentFieldOptions {
  * app by the CMS
  */
 export interface ContentDescriptor<T> {
+    /**
+     * The type of this object, formed by taking the lowercase interface name
+     * minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
+     */
     type: string;
+    /**
+     * The value provided by the CMS.
+     */
     value?: T;
 }
 export interface ImageOptions {
+    /**
+     * Minumum width of the image in pixels
+     */
     minWidth: number;
+    /**
+     * Maximum width of the image in pixels
+     */
     maxWidth: number;
+    /**
+     * Minumum height of the image in pixels
+     */
     minHeight: number;
+    /**
+     * Maximum height of the image in pixels
+     */
     maxHeight: number;
+    /**
+     * An optional aspect ratio to constrain the image to
+     */
     aspectRatio?: number;
 }
 export interface TextOptions {
+    /**
+     * Minumum number of characters in the text
+     */
     minLength: number;
+    /**
+     * Maximum number of characters in the text
+     */
     maxLength: number;
+    /**
+     * Whether newlines are permitted in the text
+     */
     multiline: boolean;
+    /**
+     * Optional string structure validation
+     */
+    validation?: TextValidationOptions;
+}
+export interface NumberOptions {
+    /**
+     * Minumum number
+     */
+    minValue?: number;
+    /**
+     * Maximum number
+     */
+    maxValue?: number;
+    /**
+     * Whether the number must be a round number
+     */
+    integer: boolean;
+}
+export interface TextValidationOptions {
+    /**
+     * A regular expression to validate against, passed into the RegExp constructor. Normally, you
+     * want to use "^pattern$" to ensure that you match the whole string not just a substring.
+     */
+    regex: string;
+    /**
+     * Valid examples to use in the error message if a CMS user enters an invalid string, optionally
+     * multiple valid examples separated with commas as per english text, e.g. "£5, $10.0 or 8HKD"
+     *
+     * The error message will read "The value you have entered is invalid, it should looke like ${examples}"
+     */
+    validExamples: string;
 }
 export interface ListOptions<O> {
+    /**
+     * The inclusive minumum number of items in the list
+     */
     min: number;
+    /**
+     * The inclusive maximum number of items in the list, */
     max: number;
+    /**
+     * An options object describing individual children
+     */
     items: O;
 }
 /**
@@ -173,6 +244,10 @@ export declare function image(options: ImageOptions & ContentFieldOptions): Cont
  */
 export declare function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions & ContentFieldOptions;
 /**
+ * Helper function for defining content managed numbers.
+ */
+export declare function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<string> & NumberOptions & ContentFieldOptions;
+/**
  * Helper function for defining lists of content managed text strings.
  */
 export declare function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions;
@@ -180,6 +255,10 @@ export declare function textList(options: ListOptions<TextOptions> & ContentFiel
  * Helper function for defining lists of content managed images.
  */
 export declare function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> & ContentFieldOptions;
+/**
+ * Helper function for defining lists of content managednumbersimages.
+ */
+export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<NumberOptions> & ContentFieldOptions;
 /**
  * Validate a content object against a schema.
  *
@@ -189,17 +268,53 @@ export declare function imageList(options: ListOptions<ImageOptions> & ContentFi
  */
 export declare function validateContent(schema: any, content: any): any;
 export interface AppMetadata {
+    /**
+     * A unique app identifier - taken from the "name" in the app's package.json
+     */
     id: string;
+    /**
+     * A short human readable app description - taken from the "description" in the app's package.json
+     */
     description: string;
+    /**
+     * A semver app version - taken from the "version" in the app's package.json
+     */
     version: string;
+    /**
+     * A a default icon used to launch the app, which may be changed in the CMS.
+     * A 250x250px image encoded as a data uri.
+     */
     defaultIconSrc: string;
+    /**
+     * Icons to display below this app's icon in the apphost navigation menu.
+     */
     menuNodes?: MenuNode[];
 }
 export interface MenuNode {
+    /**
+     * An icon used for the menu node. THIS IS REQUIRED unless launchAppId is used, in which case
+     * it may be optionally ommitted and the app's default icon will be used in place.
+     * A 250x250px image encoded as a data uri.
+     */
     iconSrc?: string;
+    /**
+     * If present, clicking this menu item will open up a new level of items below it.
+     */
     children?: MenuNode[];
+    /**
+     * If present, clicking this menu item will cause the SDK's onNavigate callback to be
+     * fired with this string as an argument.
+     */
     navigateButtonId?: string;
+    /**
+     * If present, clicking this menu item will cause the app of the specified ID to be
+     * launched. WARNING: this is an advanced feature intended for use when several related
+     * apps are controlled by a single "master" app. Most app authors do not need to use it.
+     */
     launchAppId?: string;
+    /**
+     * If true, clicking this item will close the menu.
+     */
     closeMenu?: boolean;
 }
 export interface Message {
@@ -210,6 +325,9 @@ export interface Message {
  * to receive the "init" message.
  */
 export interface LoadMessage extends Message {
+    /**
+     * See OrdamoSDKOptions::fullscreen
+     */
     fullscreen: boolean;
 }
 /**
@@ -228,11 +346,22 @@ export interface InitMessage extends Message {
      */
     version: string;
 }
+/**
+ * Describes the size of the table and the positions of diner places on it
+ */
 export interface Layout {
+    /**
+     * The locations of diner places
+     */
     plateSpots: Circle[];
     widthPx: number;
     heightPx: number;
     resolutionPixelsPerCm: number;
+    /**
+     * "Safe areas" in which content such as images and videos can be rendered without being obscured
+     * by any other UI elements. All diners on the table will have one content area that is relatively
+     * close to them and rotated in their direction.
+     */
     contentAreas: Rectangle[];
 }
 export interface Shape {
