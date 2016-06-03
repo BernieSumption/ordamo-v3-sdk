@@ -143,9 +143,8 @@ export class OrdamoSDK<T> {
 
     if (RUNNING_MODE !== RunningMode.UNIT_TESTS) {
       startTouchEmulation();
+      this._restoreState();
     }
-
-    this._restoreState();
   }
 
   private _getSavedStateKey() {
@@ -196,7 +195,6 @@ export class OrdamoSDK<T> {
    * Request that the host application closes this app and returns to the default app.
    */
   requestAppClose(): void {
-    this._requireInitMessage();
     if (RUNNING_MODE === RunningMode.HOSTED) {
       this._sendParentMessage({ eventType: "close" });
     } else if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
