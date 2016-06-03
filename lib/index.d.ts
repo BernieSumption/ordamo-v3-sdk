@@ -175,6 +175,11 @@ export interface ImageOptions {
      * An optional aspect ratio to constrain the image to
      */
     aspectRatio?: number;
+    /**
+     * If true, this "image" must be a video file capable of being played
+     * by an HTML video element.
+     */
+    isVideo?: boolean;
 }
 export interface TextOptions {
     /**
