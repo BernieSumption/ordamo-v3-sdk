@@ -437,13 +437,9 @@ export interface CrossWindowTouchEvent {
  * between windows using postMessage
  */
 export interface CrossWindowTouch {
+    identifier: number;
     clientX: number;
     clientY: number;
-    identifier: number;
-    pageX: number;
-    pageY: number;
-    screenX: number;
-    screenY: number;
 }
 /**
  * An interface implemented by both React.TouchEvent and the native TouchEvent
@@ -463,9 +459,9 @@ export interface CommonTouchEvent {
     metaKey: boolean;
     shiftKey: boolean;
 }
-export declare function makeInteractionsMessage(events: CommonTouchEvent[]): InteractionsMessage;
-export declare function makeCrossWindowTouchEvent(touchEvent: CommonTouchEvent): CrossWindowTouchEvent;
-export declare function makeCrossWindowTouch(touch: Touch): CrossWindowTouch;
+export declare function makeInteractionsMessage(events: CommonTouchEvent[], originElement?: HTMLElement): InteractionsMessage;
+export declare function makeCrossWindowTouchEvent(touchEvent: CommonTouchEvent, originCoords?: ClientRect): CrossWindowTouchEvent;
+export declare function makeCrossWindowTouch(touch: Touch, originCoords?: ClientRect): CrossWindowTouch;
 export interface NavigateMessage extends Message {
     navigateButtonId: string;
 }

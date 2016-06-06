@@ -840,13 +840,9 @@ export interface CrossWindowTouchEvent {
  * between windows using postMessage
  */
 export interface CrossWindowTouch {
+  identifier: number;
   clientX: number;
   clientY: number;
-  identifier: number;
-  pageX: number;
-  pageY: number;
-  screenX: number;
-  screenY: number;
 }
 
 /**
@@ -862,20 +858,24 @@ export interface CommonTouchEvent {
   shiftKey: boolean;
 }
 
-export function makeInteractionsMessage(events: CommonTouchEvent[]): InteractionsMessage {
+export function makeInteractionsMessage(events: CommonTouchEvent[], originElement?: HTMLElement): InteractionsMessage {
+  let coords: ClientRect;
+  if (originElement) {
+    coords = originElement.getBoundingClientRect();
+  }
   return {
     eventType: "interactions",
-    touchEvents: events.map(e => makeCrossWindowTouchEvent(e))
+    touchEvents: events.map(e => makeCrossWindowTouchEvent(e, coords))
   };
 }
 
-export function makeCrossWindowTouchEvent(touchEvent: CommonTouchEvent): CrossWindowTouchEvent {
+export function makeCrossWindowTouchEvent(touchEvent: CommonTouchEvent, originCoords?: ClientRect): CrossWindowTouchEvent {
   let touches: Touch[] = Array.prototype.slice.call(touchEvent.touches);
   let changedTouches: Touch[] = Array.prototype.slice.call(touchEvent.changedTouches);
   return {
     type: touchEvent.type,
-    touches: touches.map(t => makeCrossWindowTouch(t)),
-    changedTouches: changedTouches.map(t => makeCrossWindowTouch(t)),
+    touches: touches.map(t => makeCrossWindowTouch(t, originCoords)),
+    changedTouches: changedTouches.map(t => makeCrossWindowTouch(t, originCoords)),
     altKey: touchEvent.altKey,
     ctrlKey: touchEvent.ctrlKey,
     metaKey: touchEvent.metaKey,
@@ -883,15 +883,17 @@ export function makeCrossWindowTouchEvent(touchEvent: CommonTouchEvent): CrossWi
   };
 }
 
-export function makeCrossWindowTouch(touch: Touch): CrossWindowTouch {
+export function makeCrossWindowTouch(touch: Touch, originCoords?: ClientRect): CrossWindowTouch {
+  let clientX = touch.clientX;
+  let clientY = touch.clientY;
+  if (originCoords) {
+    clientX -= originCoords.left;
+    clientY -= originCoords.top;
+  }
   return {
-    clientX: touch.clientX,
-    clientY: touch.clientY,
     identifier: touch.identifier,
-    pageX: touch.pageX,
-    pageY: touch.pageY,
-    screenX: touch.screenX,
-    screenY: touch.screenY
+    clientX,
+    clientY
   };
 }
 
