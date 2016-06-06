@@ -36,10 +36,7 @@ export interface OrdamoSDKOptions<T> {
      */
     saveStateCallback?: () => any;
     /**
-     * A callback invoked when the user clicks on an icon in the app's nagivation menu
-     * (only relavent if the app defines a navigation menu in its metadata)
-     *
-     * It is passed a NavigateMessage object containing a navigateButtonId string property
+     * A convenience property to set the initial value of OrdamoSDK.onNavigate
      */
     onNavigate?: (navigate: NavigateMessage) => void;
     /**
@@ -58,15 +55,7 @@ export interface OrdamoSDKOptions<T> {
      */
     fullscreen?: boolean;
     /**
-     * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
-     * can use this to implement *basic* interactivity even in non-fulscreen apps.
-     *
-     * Bear in mind when using this that when users interact with the apphost they are using
-     * the apphost navigation menu, so the app shouldn't do anything distracting in response
-     * to these messages that will intefere with the use of the menu. The intention is that
-     * apps may use these messages to perform subtle background animations.
-     *
-     * It is passed a InteractionsMessage object containing an array of InteractionPoint objects
+     * A convenience property to set the initial value of OrdamoSDK.onInteractions
      */
     onInteractions?: (interactions: InteractionsMessage) => void;
 }
@@ -74,11 +63,14 @@ export interface OrdamoSDKOptions<T> {
  * The main class of the SDK. Your app is responsible for creating a single instance.
  */
 export declare class OrdamoSDK<T> {
-    private _options;
     private _initMessage;
     private _content;
     private _sentReadyEvent;
     private _savedState;
+    private _contentSchema;
+    private _initCallback;
+    private _saveStateCallback;
+    private _fullscreen;
     /**
      * When the OrdamoSDK instance is created it will communicate with the host application to
      * request the app's layout and content (or in development mode, use a mock layout and
@@ -88,15 +80,41 @@ export declare class OrdamoSDK<T> {
      *
      * @param _initAppCallback
      */
-    constructor(_options: OrdamoSDKOptions<T>);
+    constructor(options: OrdamoSDKOptions<T>);
     private _getSavedStateKey();
     /**
      * This must be called once only after the app has rendered itself
      * and it is safe to display. The app will be hidden until this is
      */
     notifyAppIsReady(): void;
+    /**
+     * Return the content that the app should render. If specific content has been created using
+     * the CMS, that content will be provided through this method, otherwise the default content
+     * from default-content.json will be returned.
+     */
     getContent(): T;
+    /**
+     * Get the table's current layout. Each restaurant table may be a different physical size with
+     * a different number and position of plates.
+     */
     getLayout(): Layout;
+    /**
+     * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
+     * can use this to implement *basic* interactivity even in non-fulscreen apps.
+     *
+     * Bear in mind when using this that when users interact with the apphost they are using
+     * the apphost navigation menu, so the app shouldn't do anything distracting in response
+     * to these messages that will intefere with the use of the menu. The intention is that
+     * apps may use these messages to perform subtle background animations.
+     */
+    onInteractions: (interactions: InteractionsMessage) => void;
+    /**
+     * A callback invoked when the user clicks on an icon in the app's nagivation menu
+     * (only relavent if the app defines a navigation menu in its metadata)
+     *
+     * It is passed a NavigateMessage object containing a navigateButtonId string property
+     */
+    onNavigate: (interactions: NavigateMessage) => void;
     /**
      * Return the saved state as created by the saveStateCallback constructor option last
      * time the application quit.
@@ -134,6 +152,10 @@ export declare class OrdamoSDK<T> {
     private _saveState();
     private _restoreState();
     private _clearState();
+    /**
+     * Supresses mouse events and convert them to touch events
+     */
+    private _startTouchEmulation();
 }
 export interface ContentFieldOptions {
     title: string;
@@ -392,14 +414,63 @@ export interface Rectangle extends Shape {
  * See OrdamoSDKOptions::onInteraction
  */
 export interface InteractionsMessage extends Message {
-    interactions: InteractionPoint[];
+    touchEvents: CrossWindowTouchEvent[];
 }
-export interface InteractionPoint {
-    id: number;
-    phase: string;
-    x: number;
-    y: number;
+/**
+ * A cut down TouchEvent containing only propertis tyhat can be safely passed
+ * between windows using postMessage.
+ *
+ * Note that this means no DOM elements, therefore there is no event.target or
+ * targetTouches
+ */
+export interface CrossWindowTouchEvent {
+    type: string;
+    touches: CrossWindowTouch[];
+    changedTouches: CrossWindowTouch[];
+    altKey: boolean;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    shiftKey: boolean;
 }
+/**
+ * A cut down Touch containing only propertis tyhat can be safely passed
+ * between windows using postMessage
+ */
+export interface CrossWindowTouch {
+    clientX: number;
+    clientY: number;
+    identifier: number;
+    pageX: number;
+    pageY: number;
+    screenX: number;
+    screenY: number;
+}
+/**
+ * An interface implemented by both React.TouchEvent and the native TouchEvent
+ */
+export interface CommonTouchEvent {
+    type: string;
+    touches: {
+        [index: number]: CrossWindowTouch;
+        length: number;
+    };
+    changedTouches: {
+        [index: number]: CrossWindowTouch;
+        length: number;
+    };
+    altKey: boolean;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    shiftKey: boolean;
+}
+export declare function makeInteractionsMessage(events: CommonTouchEvent[]): InteractionsMessage;
+export declare function makeCrossWindowTouchEvent(touchEvent: CommonTouchEvent): CrossWindowTouchEvent;
+export declare function makeCrossWindowTouch(touch: Touch): CrossWindowTouch;
 export interface NavigateMessage extends Message {
     navigateButtonId: string;
 }
+/**
+ * Supresses mouse events and convert them to touch events, optionally dispatching
+ * the touch events on target DOM elements and/or reporting them through a callback.
+ */
+export declare function startTouchEventEmulation(): void;

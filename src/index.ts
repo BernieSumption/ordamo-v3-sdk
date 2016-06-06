@@ -61,10 +61,7 @@ export interface OrdamoSDKOptions<T> {
   saveStateCallback?: () => any;
 
   /**
-   * A callback invoked when the user clicks on an icon in the app's nagivation menu
-   * (only relavent if the app defines a navigation menu in its metadata)
-   *
-   * It is passed a NavigateMessage object containing a navigateButtonId string property
+   * A convenience property to set the initial value of OrdamoSDK.onNavigate
    */
   onNavigate?: (navigate: NavigateMessage) => void;
 
@@ -85,15 +82,7 @@ export interface OrdamoSDKOptions<T> {
   fullscreen?: boolean;
 
   /**
-   * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
-   * can use this to implement *basic* interactivity even in non-fulscreen apps.
-   *
-   * Bear in mind when using this that when users interact with the apphost they are using
-   * the apphost navigation menu, so the app shouldn't do anything distracting in response
-   * to these messages that will intefere with the use of the menu. The intention is that
-   * apps may use these messages to perform subtle background animations.
-   *
-   * It is passed a InteractionsMessage object containing an array of InteractionPoint objects
+   * A convenience property to set the initial value of OrdamoSDK.onInteractions
    */
   onInteractions?: (interactions: InteractionsMessage) => void;
 }
@@ -108,6 +97,11 @@ export class OrdamoSDK<T> {
   private _sentReadyEvent = false;
   private _savedState: any = null;
 
+  private _contentSchema: T;
+  private _initCallback: () => void;
+  private _saveStateCallback: () => any;
+  private _fullscreen: boolean;
+
   /**
    * When the OrdamoSDK instance is created it will communicate with the host application to
    * request the app's layout and content (or in development mode, use a mock layout and
@@ -117,32 +111,31 @@ export class OrdamoSDK<T> {
    *
    * @param _initAppCallback
    */
-  constructor(private _options: OrdamoSDKOptions<T>) {
-    if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
-      logNotice(`running in development mode.`);
-
-      let chromeVersion = /\bChrome\/(\d+)/.exec(navigator.userAgent);
-      if (!(chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
-        alert("Sorry, Ordamo V3 apps require a recent version of Google Chrome to run. Please load this app in Chrome, and/or ensure that your copy of Chrome is up to date.");
-        throw new Error("Bad browser: " + navigator.userAgent);
-      }
-    }
+  constructor(options: OrdamoSDKOptions<T>) {
 
     if (INSTANCE_CREATED && RUNNING_MODE !== RunningMode.UNIT_TESTS) {
       throw new Error("Only one instance of OrdamoSDK may be created per application " + RUNNING_MODE);
     }
     INSTANCE_CREATED = true;
 
+    this.onInteractions = options.onInteractions;
+    this.onNavigate = options.onNavigate;
+
+    this._contentSchema = options.contentSchema;
+    this._initCallback = options.initCallback;
+    this._saveStateCallback = options.saveStateCallback;
+    this._fullscreen = options.fullscreen;
+
+
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
       this._initialiseDevelopmentMode();
     }
     else if (RUNNING_MODE === RunningMode.HOSTED) {
-      window.addEventListener("message", this._handleParentMessage.bind(this));
       this._initialiseHostedMode();
     }
 
     if (RUNNING_MODE !== RunningMode.UNIT_TESTS) {
-      startTouchEmulation();
+      this._startTouchEmulation();
       this._restoreState();
     }
   }
@@ -167,15 +160,43 @@ export class OrdamoSDK<T> {
     }
   }
 
+  /**
+   * Return the content that the app should render. If specific content has been created using
+   * the CMS, that content will be provided through this method, otherwise the default content
+   * from default-content.json will be returned.
+   */
   getContent(): T {
     this._requireInitMessage();
     return this._content;
   }
 
+  /**
+   * Get the table's current layout. Each restaurant table may be a different physical size with
+   * a different number and position of plates.
+   */
   getLayout(): Layout {
     this._requireInitMessage();
     return this._initMessage.layout;
   }
+
+  /**
+   * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
+   * can use this to implement *basic* interactivity even in non-fulscreen apps.
+   *
+   * Bear in mind when using this that when users interact with the apphost they are using
+   * the apphost navigation menu, so the app shouldn't do anything distracting in response
+   * to these messages that will intefere with the use of the menu. The intention is that
+   * apps may use these messages to perform subtle background animations.
+   */
+  onInteractions: (interactions: InteractionsMessage) => void;
+
+  /**
+   * A callback invoked when the user clicks on an icon in the app's nagivation menu
+   * (only relavent if the app defines a navigation menu in its metadata)
+   *
+   * It is passed a NavigateMessage object containing a navigateButtonId string property
+   */
+  onNavigate: (interactions: NavigateMessage) => void;
 
   /**
    * Return the saved state as created by the saveStateCallback constructor option last
@@ -203,7 +224,7 @@ export class OrdamoSDK<T> {
       document.body.style.visibility = "hidden";
       logNotice("The app has been closed. In a hosted application, the user would now be seeing the main menu.");
     }
-    if (this._options.saveStateCallback) {
+    if (this._saveStateCallback) {
       this._saveState();
     }
   }
@@ -243,19 +264,20 @@ export class OrdamoSDK<T> {
       }
     }
 
-    if (message.eventType === "interactions" && this._options.onInteractions) {
-      this._options.onInteractions(message as InteractionsMessage);
+    if (message.eventType === "interactions" && this.onInteractions) {
+      this.onInteractions(message as InteractionsMessage);
     }
 
-    if (message.eventType === "navigate" && this._options.onNavigate) {
-      this._options.onNavigate(message as NavigateMessage);
+    if (message.eventType === "navigate" && this.onNavigate) {
+      this.onNavigate(message as NavigateMessage);
     }
   }
 
   private _initialiseHostedMode() {
+    window.addEventListener("message", this._handleParentMessage.bind(this));
     let loadMessage: LoadMessage = {
       eventType: "load",
-      fullscreen: !!this._options.fullscreen
+      fullscreen: !!this._fullscreen
     };
     this._sendParentMessage(loadMessage);
   }
@@ -265,6 +287,14 @@ export class OrdamoSDK<T> {
   }
 
   private _initialiseDevelopmentMode() {
+    logNotice(`running in development mode.`);
+
+    let chromeVersion = /\bChrome\/(\d+)/.exec(navigator.userAgent);
+    if (!(chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
+      alert("Sorry, Ordamo V3 apps require a recent version of Google Chrome to run. Please load this app in Chrome, and/or ensure that your copy of Chrome is up to date.");
+      throw new Error("Bad browser: " + navigator.userAgent);
+    }
+
     this._receiveInitMessage({
       eventType: "init",
       content: null,
@@ -305,14 +335,14 @@ export class OrdamoSDK<T> {
 
   private _finishInitialisation() {
 
-    this._content = JSON.parse(JSON.stringify(this._options.contentSchema));
-    validateContent(this._options.contentSchema, this._initMessage.content);
+    this._content = JSON.parse(JSON.stringify(this._contentSchema));
+    validateContent(this._contentSchema, this._initMessage.content);
     for (let prop in this._content) {
       this._content[prop].value = this._initMessage.content[prop];
     }
 
-    if (this._options.initCallback) {
-      this._options.initCallback();
+    if (this._initCallback) {
+      this._initCallback();
     }
 
 
@@ -353,10 +383,10 @@ export class OrdamoSDK<T> {
   }
 
   private _saveState() {
-    if (this._options.saveStateCallback) {
+    if (this._saveStateCallback) {
       let storedForm: StoredState = {
         timestamp: Date.now(),
-        state: this._options.saveStateCallback()
+        state: this._saveStateCallback()
       };
       sessionStorage.setItem(this._getSavedStateKey(), JSON.stringify(storedForm));
     }
@@ -382,6 +412,34 @@ export class OrdamoSDK<T> {
 
   private _clearState() {
     sessionStorage.removeItem(this._getSavedStateKey());
+  }
+
+
+
+  /**
+   * Supresses mouse events and convert them to touch events
+   */
+  private _startTouchEmulation() {
+
+    startTouchEventEmulation();
+
+    if (RUNNING_MODE === RunningMode.DEVELOPMENT && !this._fullscreen) {
+      logNotice("Supressing touch events because this app is not fullscreen. Background apps must use onInteractions instead.");
+    }
+
+    let interceptTouchEvent = (e: TouchEvent) => {
+      if (!this._fullscreen) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      if (this.onInteractions) {
+        this.onInteractions(makeInteractionsMessage([e]));
+      }
+    };
+
+    document.body.addEventListener("touchstart", interceptTouchEvent, true);
+    document.body.addEventListener("touchmove", interceptTouchEvent, true);
+    document.body.addEventListener("touchend", interceptTouchEvent, true);
   }
 }
 
@@ -756,14 +814,85 @@ export interface Rectangle extends Shape {
  * See OrdamoSDKOptions::onInteraction
  */
 export interface InteractionsMessage extends Message {
-  interactions: InteractionPoint[];
+  touchEvents: CrossWindowTouchEvent[];
 }
 
-export interface InteractionPoint {
-  id: number;
-  phase: string;
-  x: number;
-  y: number;
+/**
+ * A cut down TouchEvent containing only propertis tyhat can be safely passed
+ * between windows using postMessage.
+ * 
+ * Note that this means no DOM elements, therefore there is no event.target or
+ * targetTouches
+ */
+export interface CrossWindowTouchEvent {
+  type: string;
+  touches: CrossWindowTouch[];
+  changedTouches: CrossWindowTouch[];
+  // no targetTouches - can't serialise DOM nodes
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+/**
+ * A cut down Touch containing only propertis tyhat can be safely passed
+ * between windows using postMessage
+ */
+export interface CrossWindowTouch {
+  clientX: number;
+  clientY: number;
+  identifier: number;
+  pageX: number;
+  pageY: number;
+  screenX: number;
+  screenY: number;
+}
+
+/**
+ * An interface implemented by both React.TouchEvent and the native TouchEvent
+ */
+export interface CommonTouchEvent {
+  type: string;
+  touches: { [index: number]: CrossWindowTouch, length: number };
+  changedTouches: { [index: number]: CrossWindowTouch, length: number };
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+export function makeInteractionsMessage(events: CommonTouchEvent[]): InteractionsMessage {
+  return {
+    eventType: "interactions",
+    touchEvents: events.map(e => makeCrossWindowTouchEvent(e))
+  };
+}
+
+export function makeCrossWindowTouchEvent(touchEvent: CommonTouchEvent): CrossWindowTouchEvent {
+  let touches: Touch[] = Array.prototype.slice.call(touchEvent.touches);
+  let changedTouches: Touch[] = Array.prototype.slice.call(touchEvent.changedTouches);
+  return {
+    type: touchEvent.type,
+    touches: touches.map(t => makeCrossWindowTouch(t)),
+    changedTouches: changedTouches.map(t => makeCrossWindowTouch(t)),
+    altKey: touchEvent.altKey,
+    ctrlKey: touchEvent.ctrlKey,
+    metaKey: touchEvent.metaKey,
+    shiftKey: touchEvent.shiftKey,
+  };
+}
+
+export function makeCrossWindowTouch(touch: Touch): CrossWindowTouch {
+  return {
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    identifier: touch.identifier,
+    pageX: touch.pageX,
+    pageY: touch.pageY,
+    screenX: touch.screenX,
+    screenY: touch.screenY
+  };
 }
 
 export interface NavigateMessage extends Message {
@@ -858,34 +987,22 @@ function makeMockLayout(): Layout {
 
 }
 
-
 /**
- * Supresses mouse events and convert them to touch events
+ * Supresses mouse events and convert them to touch events, optionally dispatching
+ * the touch events on target DOM elements and/or reporting them through a callback. 
  */
-function startTouchEmulation() {
+export function startTouchEventEmulation() {
 
   let currentElement: HTMLElement;
   let hasNativeTouchEvents = false;
 
-  window.addEventListener("touchstart", checkForNativeEvent, true);
-
-  window.addEventListener("mousedown", handleMouseEvent("touchstart"), true);
-  window.addEventListener("mousemove", handleMouseEvent("touchmove"), true);
-  window.addEventListener("mouseup", handleMouseEvent("touchend"), true);
-
-  window.addEventListener("click", killEventDead, true);
-  window.addEventListener("mouseenter", killEventDead, true);
-  window.addEventListener("mouseleave", killEventDead, true);
-  window.addEventListener("mouseout", killEventDead, true);
-  window.addEventListener("mouseover", killEventDead, true);
-
-  function killEventDead(event: Event) {
+  let killEventDead = (event: Event) => {
     event.preventDefault();
     event.stopPropagation();
-  }
+  };
 
-  function handleMouseEvent(touchType: string) {
-    return function (mouseEvent: MouseEvent) {
+  let handleMouseEvent = (touchType: string) => {
+    return (mouseEvent: MouseEvent) => {
 
       if ((mouseEvent.target as HTMLElement).nodeName !== "INPUT") {  // messing with native events on inputs breaks them
 
@@ -906,18 +1023,18 @@ function startTouchEmulation() {
           return;
         }
 
-        let touch = new (Touch as any)({
+        let touch: Touch = new (Touch as any)({
           identifier: 1,
           target: currentElement,
           clientX: mouseEvent.clientX,
           clientY: mouseEvent.clientY,
           pageX: mouseEvent.pageX,
-          pageXY: mouseEvent.pageY,
+          pageY: mouseEvent.pageY,
           screenX: mouseEvent.screenX,
           screenY: mouseEvent.screenY,
         });
 
-        let touchEvent = new (TouchEvent as any)(touchType, {
+        let touchEvent: TouchEvent = new (TouchEvent as any)(touchType, {
           touches: mouseEvent.type === "mouseup" ? [] : [touch],
           targetTouches: mouseEvent.type === "mouseup" ? [] : [touch],
           changedTouches: [touch],
@@ -930,19 +1047,30 @@ function startTouchEmulation() {
         });
 
         currentElement.dispatchEvent(touchEvent);
-
       }
 
       if (mouseEvent.type === "mouseup") {
         currentElement = null;
       }
     };
-  }
+  };
 
-  function checkForNativeEvent(e: TouchEvent) {
+  let checkForNativeEvent = (e: TouchEvent) => {
     if (e.isTrusted) {
       window.removeEventListener("touchstart", checkForNativeEvent, true);
       hasNativeTouchEvents = true;
     }
-  }
+  };
+
+  window.addEventListener("touchstart", checkForNativeEvent, true);
+
+  window.addEventListener("mousedown", handleMouseEvent("touchstart"), true);
+  window.addEventListener("mousemove", handleMouseEvent("touchmove"), true);
+  window.addEventListener("mouseup", handleMouseEvent("touchend"), true);
+
+  window.addEventListener("click", killEventDead, true);
+  window.addEventListener("mouseenter", killEventDead, true);
+  window.addEventListener("mouseleave", killEventDead, true);
+  window.addEventListener("mouseout", killEventDead, true);
+  window.addEventListener("mouseover", killEventDead, true);
 }
