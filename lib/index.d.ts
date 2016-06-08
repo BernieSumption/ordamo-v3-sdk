@@ -20,10 +20,13 @@ export declare const enum RunningMode {
 export declare function getRunningMode(): RunningMode;
 export interface OrdamoSDKOptions<T> {
     /**
-     * Required. A description of the content requirements of this SDK applicaiton,
-     * created using the sdk content functions e.g. {myImage: sdk.image(...)}
+     * A description of the content requirements of this SDK applicaiton,
+     * created using the sdk content functions e.g. {myImage: sdk.image(...)}.
+     *
+     * This is used to generate a CMS interface for the app, and can be ommitted for apps
+     * with no managed content.
      */
-    contentSchema: T;
+    contentSchema?: T;
     /**
      * Required. A function to be called when data loading is complete and the
      * app may begin rendering itself based on the layout and content.
@@ -98,6 +101,12 @@ export declare class OrdamoSDK<T> {
      * a different number and position of plates.
      */
     getLayout(): Layout;
+    /**
+     * Return the table label provided by the apphost.
+     *
+     * See InitMessage.table for format information.
+     */
+    getTableLabel(): string;
     /**
      * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
      * can use this to implement *basic* interactivity even in non-fulscreen apps.
@@ -300,6 +309,12 @@ export interface AppMetadata {
      */
     id: string;
     /**
+     * If the app is deployed on a different server to the apphost, the HTTP url of the app.
+     * Apps normally don't set this themselves - it is updated in the metdata file by the
+     * person responsible for deploying the app, once the URL is known.
+     */
+    url?: string;
+    /**
      * A short human readable app description - taken from the "description" in the app's package.json
      */
     description: string;
@@ -411,7 +426,7 @@ export interface Rectangle extends Shape {
     rotationDegrees: number;
 }
 /**
- * See OrdamoSDKOptions::onInteraction
+ * See OrdamoSDKOptions::onInteractions
  */
 export interface InteractionsMessage extends Message {
     touchEvents: CrossWindowTouchEvent[];

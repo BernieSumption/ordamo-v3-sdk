@@ -42,10 +42,13 @@ export function getRunningMode() {
 
 export interface OrdamoSDKOptions<T> {
   /**
-   * Required. A description of the content requirements of this SDK applicaiton,
-   * created using the sdk content functions e.g. {myImage: sdk.image(...)}
+   * A description of the content requirements of this SDK applicaiton,
+   * created using the sdk content functions e.g. {myImage: sdk.image(...)}.
+   * 
+   * This is used to generate a CMS interface for the app, and can be ommitted for apps
+   * with no managed content.
    */
-  contentSchema: T;
+  contentSchema?: T;
 
   /**
    * Required. A function to be called when data loading is complete and the
@@ -177,6 +180,16 @@ export class OrdamoSDK<T> {
   getLayout(): Layout {
     this._requireInitMessage();
     return this._initMessage.layout;
+  }
+
+  /**
+   * Return the table label provided by the apphost.
+   * 
+   * See InitMessage.table for format information.
+   */
+  getTableLabel(): string {
+    this._requireInitMessage();
+    return this._initMessage.table;
   }
 
   /**
@@ -326,7 +339,7 @@ export class OrdamoSDK<T> {
       return;
     }
     this._initMessage = message;
-    if (message.content) {
+    if (message.content || !this._contentSchema) {
       this._finishInitialisation();
     } else {
       this._loadDefaultContentFile();
@@ -335,10 +348,12 @@ export class OrdamoSDK<T> {
 
   private _finishInitialisation() {
 
-    this._content = JSON.parse(JSON.stringify(this._contentSchema));
-    validateContent(this._contentSchema, this._initMessage.content);
-    for (let prop in this._content) {
-      this._content[prop].value = this._initMessage.content[prop];
+    if (this._contentSchema) {
+      this._content = JSON.parse(JSON.stringify(this._contentSchema));
+      validateContent(this._contentSchema, this._initMessage.content);
+      for (let prop in this._content) {
+        this._content[prop].value = this._initMessage.content[prop];
+      }
     }
 
     if (this._initCallback) {
@@ -424,7 +439,7 @@ export class OrdamoSDK<T> {
     startTouchEventEmulation();
 
     if (RUNNING_MODE === RunningMode.DEVELOPMENT && !this._fullscreen) {
-      logNotice("Supressing touch events because this app is not fullscreen. Background apps must use onInteractions instead.");
+      logNotice("Supressing touch events because this app is not fullscreen. Background apps can use OrdamoSDK.onInteractions instead.");
     }
 
     let interceptTouchEvent = (e: TouchEvent) => {
@@ -680,6 +695,12 @@ export interface AppMetadata {
    */
   id: string;
   /**
+   * If the app is deployed on a different server to the apphost, the HTTP url of the app.
+   * Apps normally don't set this themselves - it is updated in the metdata file by the
+   * person responsible for deploying the app, once the URL is known.
+   */
+  url?: string;
+  /**
    * A short human readable app description - taken from the "description" in the app's package.json
    */
   description: string;
@@ -811,7 +832,7 @@ export interface Rectangle extends Shape {
 }
 
 /**
- * See OrdamoSDKOptions::onInteraction
+ * See OrdamoSDKOptions::onInteractions
  */
 export interface InteractionsMessage extends Message {
   touchEvents: CrossWindowTouchEvent[];
@@ -925,19 +946,20 @@ function makeMockLayout(): Layout {
     clearCentreSpace = queryParams["avoidCentre"] ? 1 : 0,
     width = window.innerWidth,
     height = window.innerHeight,
+    resolution = 12,
     padding = 20,
     columns = Math.min(3, numPlateSpots + numContentAreas + clearCentreSpace),
     rows = Math.ceil((numPlateSpots + numContentAreas + clearCentreSpace) / columns),
     radius = Math.min((width - padding * (columns + 1)) / columns, (height - padding * (rows + 1)) / rows) / 2,
     size = padding + radius * 2;
 
-  logNotice(`Making mock layout with ${numPlateSpots} plate spots and ${numContentAreas} content areas${clearCentreSpace ? " and keeping the centre clear" : ""}. Control the layout with URL parameters like so: ?plateSpots=4&contentAreas=2&rotation=0&avoidCentre=1`);
+  logNotice(`Making mock layout ${width}x${height}px (~ ${Math.round(width / resolution)}x${Math.round(height / resolution)}cm) with ${numPlateSpots} plate spots and ${numContentAreas} content areas${clearCentreSpace ? " and keeping the centre clear" : ""}. Control the layout with URL parameters like so: ?plateSpots=4&contentAreas=2&rotation=0&avoidCentre=1`);
 
   let item = 0, itemOffset = 0, column = 0, row = 0, x = 0, y = 0, rotation = queryParams["rotation"];
   return {
     "widthPx": width,
-    "heightPx": width,
-    "resolutionPixelsPerCm": 12,
+    "heightPx": height,
+    "resolutionPixelsPerCm": resolution,
     "plateSpots": flowLayout(numPlateSpots, (): Circle => {
       return {
         "type": "circle",
