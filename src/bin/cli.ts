@@ -21,7 +21,9 @@ if (commandName === "generate") {
 } else if (commandName === "concat-app-to-html") {
   doCommand("concat-app-to-html", concatAppToHtmlCommand, args);
 } else if (commandName === "write-debug-html") {
-  doCommand("write-debug-html", writeDebugHtmlCommand, args);
+  doCommand("write-debug-html", writeAppHtmlCommand, args.concat(["app.js"]));
+} else if (commandName === "write-app-html") {
+  doCommand("write-app-html", writeAppHtmlCommand, args);
 } else {
   fatalError(`Invalid command "${commandName}"`);
 }
@@ -94,7 +96,7 @@ ${jsContent}
   fs.writeFileSync(outFile, result, { encoding: "utf8" });
 }
 
-function writeDebugHtmlCommand(outFile: string) {
+function writeAppHtmlCommand(outFile: string, jsFile: string = "app.js") {
   let result = `
 <html>
 <head>
@@ -102,7 +104,7 @@ function writeDebugHtmlCommand(outFile: string) {
     <link rel="stylesheet" type="text/css" href="app.css">
 </head>
 <body>
-<script src="app.js"></script>
+<script src="${jsFile}"></script>
 </body>
 </html>
 `;
