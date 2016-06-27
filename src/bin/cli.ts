@@ -21,7 +21,7 @@ if (commandName === "generate") {
 } else if (commandName === "concat-app-to-html") {
   doCommand("concat-app-to-html", concatAppToHtmlCommand, args);
 } else if (commandName === "write-debug-html") {
-  doCommand("write-debug-html", writeAppHtmlCommand, args.concat(["app.js"]));
+  doCommand("write-debug-html", writeAppHtmlCommand, args.concat(["app.js", "app.css"]));
 } else if (commandName === "write-app-html") {
   doCommand("write-app-html", writeAppHtmlCommand, args);
 } else {
@@ -96,15 +96,25 @@ ${jsContent}
   fs.writeFileSync(outFile, result, { encoding: "utf8" });
 }
 
-function writeAppHtmlCommand(outFile: string, jsFile: string = "app.js") {
+function writeAppHtmlCommand(outFile: string, jsFile: string , cssFile: string) {
   let result = `
 <html>
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" type="text/css" href="app.css">
+    <script>
+    var appStyle = document.createElement("link");
+    appStyle.setAttribute("rel", "stylesheet");
+    appStyle.setAttribute("type", "text/css");
+    appStyle.setAttribute("href", ${JSON.stringify(cssFile)} + document.location.search);
+    document.head.appendChild(appStyle);
+    </script>
 </head>
 <body>
-<script src="${jsFile}"></script>
+<script>
+var appScript = document.createElement("script");
+appScript.setAttribute("src", ${JSON.stringify(jsFile)} + document.location.search);
+document.body.appendChild(appScript);
+</script>
 </body>
 </html>
 `;
