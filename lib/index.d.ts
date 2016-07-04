@@ -282,7 +282,7 @@ export declare function text(options: TextOptions & ContentFieldOptions): Conten
 /**
  * Helper function for defining content managed numbers.
  */
-export declare function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<string> & NumberOptions & ContentFieldOptions;
+export declare function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions & ContentFieldOptions;
 /**
  * Helper function for defining lists of content managed text strings.
  */
@@ -294,7 +294,7 @@ export declare function imageList(options: ListOptions<ImageOptions> & ContentFi
 /**
  * Helper function for defining lists of content managednumbersimages.
  */
-export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<NumberOptions> & ContentFieldOptions;
+export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions;
 /**
  * Validate a content object against a schema.
  *

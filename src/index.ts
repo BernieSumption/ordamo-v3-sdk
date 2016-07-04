@@ -292,6 +292,14 @@ export class OrdamoSDK<T> {
       eventType: "load",
       fullscreen: !!this._fullscreen
     };
+    function goFullscreen() {
+      if (document.webkitFullscreenEnabled && !document.webkitFullscreenElement) {
+        document.body.webkitRequestFullScreen();
+      }
+    }
+    if (document.location.search.match(/\bmanualFullscreen=true/)) {
+      document.body.addEventListener("touchstart", goFullscreen);
+    }
     this._sendParentMessage(loadMessage);
   }
 
@@ -609,7 +617,7 @@ export function text(options: TextOptions & ContentFieldOptions): ContentDescrip
 /**
  * Helper function for defining content managed numbers.
  */
-export function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<string> & NumberOptions & ContentFieldOptions {
+export function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions & ContentFieldOptions {
   return Object.assign({ type: "number" }, options);
 }
 
@@ -632,7 +640,7 @@ export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptio
 /**
  * Helper function for defining lists of content managednumbersimages.
  */
-export function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<NumberOptions> & ContentFieldOptions {
+export function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions {
   options.items = Object.assign({ type: "number" }, options.items);
   return Object.assign({ type: "list" }, options);
 }
