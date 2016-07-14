@@ -387,6 +387,11 @@ export interface InitMessage extends Message {
      * The app's version as defined in its metadata file for deployment
      */
     version: string;
+    /**
+     * A number that will change whenever a new group of people are seated at the table.
+     * It is used to decide whether to restore a saved session.
+     */
+    sessionId: number;
 }
 /**
  * Describes the size of the table and the positions of diner places on it

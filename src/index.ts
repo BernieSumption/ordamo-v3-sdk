@@ -139,7 +139,6 @@ export class OrdamoSDK<T> {
 
     if (RUNNING_MODE !== RunningMode.UNIT_TESTS) {
       this._startTouchEmulation();
-      this._restoreState();
     }
   }
 
@@ -292,14 +291,6 @@ export class OrdamoSDK<T> {
       eventType: "load",
       fullscreen: !!this._fullscreen
     };
-    function goFullscreen() {
-      if (document.webkitFullscreenEnabled && !document.webkitFullscreenElement) {
-        document.body.webkitRequestFullScreen();
-      }
-    }
-    if (document.location.search.match(/\bmanualFullscreen=true/)) {
-      document.body.addEventListener("touchstart", goFullscreen);
-    }
     this._sendParentMessage(loadMessage);
   }
 
@@ -321,7 +312,8 @@ export class OrdamoSDK<T> {
       content: null,
       layout: makeMockLayout(),
       table: "1",
-      version: `0.${Math.round(Math.random() * 99999)}-MOCKVERSION-SDK-DEVMODE`
+      version: `0.${Math.round(Math.random() * 99999)}-MOCKVERSION-SDK-DEVMODE`,
+      sessionId: 1
     });
 
     if (document.location.search.match(/\bmanualFullscreen=true/)) {
@@ -347,6 +339,7 @@ export class OrdamoSDK<T> {
       return;
     }
     this._initMessage = message;
+    this._restoreState();
     if (message.content || !this._contentSchema) {
       this._finishInitialisation();
     } else {
@@ -409,7 +402,9 @@ export class OrdamoSDK<T> {
     if (this._saveStateCallback) {
       let storedForm: StoredState = {
         timestamp: Date.now(),
-        state: this._saveStateCallback()
+        state: this._saveStateCallback(),
+        appVersion: this._initMessage.version,
+        sessionId: this._initMessage.sessionId
       };
       sessionStorage.setItem(this._getSavedStateKey(), JSON.stringify(storedForm));
     }
@@ -420,11 +415,17 @@ export class OrdamoSDK<T> {
     if (storedForm) {
       try {
         let save: StoredState = JSON.parse(storedForm);
-        if (Date.now() - save.timestamp < MAX_SAVED_STATE_SECONDS * 1000) {
-          this._savedState = save.state;
-        } else {
+        if (save.appVersion !== this._initMessage.version) {
+          logNotice(`Ignoring saved state, app version has changed from "${save.appVersion}" to "${this._initMessage.version}".`);
+          this._clearState();
+        } else if (save.sessionId !== this._initMessage.sessionId) {
+          logNotice(`Ignoring saved state, session has changed.`);
+          this._clearState();
+        } else if (Date.now() - save.timestamp > MAX_SAVED_STATE_SECONDS * 1000) {
           logNotice(`Ignoring saved state older than ${MAX_SAVED_STATE_SECONDS} seconds.`);
           this._clearState();
+        } else {
+          this._savedState = save.state;
         }
       } catch (e) {
         console.error("Error parsing save data, wiping saved state", e, storedForm);
@@ -477,6 +478,8 @@ function logError(message: string) {
 interface StoredState {
   state: string;
   timestamp: number;
+  appVersion: string;
+  sessionId: number;
 }
 
 //
@@ -796,6 +799,12 @@ export interface InitMessage extends Message {
    * The app's version as defined in its metadata file for deployment
    */
   version: string;
+
+  /**
+   * A number that will change whenever a new group of people are seated at the table.
+   * It is used to decide whether to restore a saved session.
+   */
+  sessionId: number;
 }
 
 /**
