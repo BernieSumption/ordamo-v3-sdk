@@ -108,6 +108,14 @@ export declare class OrdamoSDK<T> {
      */
     getTableLabel(): string;
     /**
+     * Return the requiredWidth value from the app's metadata, or undefined if no requiredWidth is set
+     */
+    getRequiredWidth(): number;
+    /**
+     * Return the requiredHeight value from the app's metadata, or undefined if no requiredHeight is set
+     */
+    getRequiredHeight(): number;
+    /**
      * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
      * can use this to implement *basic* interactivity even in non-fulscreen apps.
      *
@@ -331,6 +339,16 @@ export interface AppMetadata {
      * Icons to display below this app's icon in the apphost navigation menu.
      */
     menuNodes?: MenuNode[];
+    /**
+     * The minimum width in pixels that this app requires to display. If less width is available,
+     * the app will not be available for users to select through the navigation menu
+     */
+    requiredWidth?: number;
+    /**
+     * The minimum height in pixels that this app requires to display. If less height is available,
+     * the app will not be available for users to select through the navigation menu
+     */
+    requiredHeight?: number;
 }
 export interface MenuNode {
     /**
@@ -392,6 +410,14 @@ export interface InitMessage extends Message {
      * It is used to decide whether to restore a saved session.
      */
     sessionId: number;
+    /**
+     * requiredWidth value from the app's metadata
+     */
+    requiredWidth?: number;
+    /**
+     * requiredHeight value from the app's metadata
+     */
+    requiredHeight?: number;
 }
 /**
  * Describes the size of the table and the positions of diner places on it

@@ -192,6 +192,22 @@ export class OrdamoSDK<T> {
   }
 
   /**
+   * Return the requiredWidth value from the app's metadata, or undefined if no requiredWidth is set
+   */
+  getRequiredWidth(): number {
+    this._requireInitMessage();
+    return this._initMessage.requiredWidth;
+  }
+
+  /**
+   * Return the requiredHeight value from the app's metadata, or undefined if no requiredHeight is set
+   */
+  getRequiredHeight(): number {
+    this._requireInitMessage();
+    return this._initMessage.requiredHeight;
+  }
+
+  /**
    * Sent by the host to non-fullscreen apps when there has been some interaction. Apps
    * can use this to implement *basic* interactivity even in non-fulscreen apps.
    *
@@ -231,8 +247,9 @@ export class OrdamoSDK<T> {
     if (RUNNING_MODE === RunningMode.HOSTED) {
       this._sendParentMessage({ eventType: "close" });
     } else if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
-      document.body.style.transition = "opacity 1s, visibility 0s linear 1s";
+      document.body.style.transition = "opacity 1s, background 1s, visibility 0s linear 1s";
       document.body.style.opacity = "0";
+      document.documentElement.style.background = "#FFF"; // <html> needs a background, or <body>'s one will display even if its hidden
       document.body.style.visibility = "hidden";
       logNotice("The app has been closed. In a hosted application, the user would now be seeing the main menu.");
     }
@@ -307,13 +324,17 @@ export class OrdamoSDK<T> {
       throw new Error("Bad browser: " + navigator.userAgent);
     }
 
+    let mockLayout = makeMockLayout();
+
     this._receiveInitMessage({
       eventType: "init",
       content: null,
-      layout: makeMockLayout(),
+      layout: mockLayout,
       table: "1",
       version: `0.${Math.round(Math.random() * 99999)}-MOCKVERSION-SDK-DEVMODE`,
-      sessionId: 1
+      sessionId: 1,
+      requiredWidth: 800,
+      requiredHeight: 600,
     });
 
     if (document.location.search.match(/\bmanualFullscreen=true/)) {
@@ -728,6 +749,16 @@ export interface AppMetadata {
    * Icons to display below this app's icon in the apphost navigation menu.
    */
   menuNodes?: MenuNode[];
+  /**
+   * The minimum width in pixels that this app requires to display. If less width is available,
+   * the app will not be available for users to select through the navigation menu 
+   */
+  requiredWidth?: number;
+  /**
+   * The minimum height in pixels that this app requires to display. If less height is available,
+   * the app will not be available for users to select through the navigation menu 
+   */
+  requiredHeight?: number;
 }
 
 
@@ -805,6 +836,14 @@ export interface InitMessage extends Message {
    * It is used to decide whether to restore a saved session.
    */
   sessionId: number;
+  /**
+   * requiredWidth value from the app's metadata 
+   */
+  requiredWidth?: number;
+  /**
+   * requiredHeight value from the app's metadata
+   */
+  requiredHeight?: number;
 }
 
 /**
