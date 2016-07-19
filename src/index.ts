@@ -1011,7 +1011,7 @@ function makeMockLayout(): Layout {
 
   logNotice(`Making mock layout ${width}x${height}px (~ ${Math.round(width / resolution)}x${Math.round(height / resolution)}cm) with ${numPlateSpots} plate spots and ${numContentAreas} content areas${clearCentreSpace ? " and keeping the centre clear" : ""}. Control the layout with URL parameters like so: ?plateSpots=4&contentAreas=2&rotation=0&avoidCentre=1`);
 
-  let item = 0, itemOffset = 0, column = 0, row = 0, x = 0, y = 0, rotation = queryParams["rotation"];
+  let item = 0, itemOffset = 0, x = 0, y = 0, rotation = queryParams["rotation"];
   return {
     "widthPx": width,
     "heightPx": height,
