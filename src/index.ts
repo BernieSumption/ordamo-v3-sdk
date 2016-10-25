@@ -148,7 +148,8 @@ export class OrdamoSDK<T> {
 
   /**
    * This must be called once only after the app has rendered itself
-   * and it is safe to display. The app will be hidden until this is
+   * and it is safe to display. The app will be hidden until this is called, preventing the user
+   * from seeing e.g. half-loaded content.
    */
   notifyAppIsReady(): void {
     if (!this._initMessage) {
@@ -669,53 +670,6 @@ export function numberList(options: ListOptions<NumberOptions> & ContentFieldOpt
   return Object.assign({ type: "list" }, options);
 }
 
-/**
- * Validate a content object against a schema.
- *
- * This function validates that the content has the right set of fields, but does
- * not perform semantic validation e.g. checking that the lengths of strings are
- * within the defined minLength and maxLength bounds.
- */
-export function validateContent(schema: any, content: any) {
-  for (let key in schema) {
-    if (!(key in content)) {
-      throw new Error(`Schema contains item "${key} that is missing from the content.`);
-    }
-    let schemaItem: ContentDescriptor<any> & ListOptions<any> = schema[key];
-    if (schemaItem.type === "image" || schemaItem.type === "text") {
-      validateType([content[key]], "string", "a string", key);
-    }
-    if (schemaItem.type === "number") {
-      validateType([content[key]], "number", "a number", key);
-    }
-    if (schemaItem.type === "list") {
-      if (!Array.isArray(content[key])) {
-        throw new Error(`Expected content.${key} to be an array, but it is a ${typeof content[key]}`);
-      } else {
-        if (schemaItem.items.type === "image" || schemaItem.items.type === "text") {
-          validateType(content[key], "string", "an array of strings", key);
-        }
-        if (schemaItem.type === "number") {
-          validateType(content[key], "number", "an array of numbers", key);
-        }
-      }
-    }
-  }
-  for (let key in content) {
-    if (!(key in schema)) {
-      throw new Error(`Content contains item "${key}" that doesn't exist in the schema.`);
-    }
-  }
-  return content;
-
-  function validateType(items: any[], expectedType: string, expectedTypeHuman: string, key: string) {
-    for (let item of items) {
-      if (typeof item !== expectedType) {
-        throw new Error(`Expected content.${key} to be ${expectedTypeHuman}, but it contains a ${typeof item}`);
-      }
-    }
-  }
-}
 
 //
 // METADATA

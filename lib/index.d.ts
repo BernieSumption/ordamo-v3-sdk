@@ -87,7 +87,8 @@ export declare class OrdamoSDK<T> {
     private _getSavedStateKey();
     /**
      * This must be called once only after the app has rendered itself
-     * and it is safe to display. The app will be hidden until this is
+     * and it is safe to display. The app will be hidden until this is called, preventing the user
+     * from seeing e.g. half-loaded content.
      */
     notifyAppIsReady(): void;
     /**
@@ -303,14 +304,6 @@ export declare function imageList(options: ListOptions<ImageOptions> & ContentFi
  * Helper function for defining lists of content managednumbersimages.
  */
 export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions;
-/**
- * Validate a content object against a schema.
- *
- * This function validates that the content has the right set of fields, but does
- * not perform semantic validation e.g. checking that the lengths of strings are
- * within the defined minLength and maxLength bounds.
- */
-export declare function validateContent(schema: any, content: any): any;
 export interface AppMetadata {
     /**
      * A unique app identifier - taken from the "name" in the app's package.json
