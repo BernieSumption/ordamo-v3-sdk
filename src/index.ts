@@ -373,7 +373,6 @@ export class OrdamoSDK<T> {
 
     if (this._contentSchema) {
       this._content = JSON.parse(JSON.stringify(this._contentSchema));
-      validateContent(this._contentSchema, this._initMessage.content);
       for (let prop in this._content) {
         this._content[prop].value = this._initMessage.content[prop];
       }
