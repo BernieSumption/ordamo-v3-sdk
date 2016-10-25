@@ -23,6 +23,7 @@
     "typescript": "^2.0.3"
   },
   "dependencies": {
+    "rimraf": "^2.5.4",
     "typescript-require": "^0.2.9"
   }
 }

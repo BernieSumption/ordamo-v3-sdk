@@ -1,11 +1,12 @@
 #! /usr/bin/env node
 
-/// <reference path="../../node_modules/retyped-node-tsd-ambient/node.d.ts" />
+/// <reference path="../../typings/index.d.ts" />
 
 
 import path = require("path");
 import fs = require("fs");
 import * as sdk from "../index";
+import * as rimraf from "rimraf";
 require("typescript-require");
 
 const COMMANDS: Command[] = [
@@ -13,7 +14,7 @@ const COMMANDS: Command[] = [
     name: "build-content",
     args: [
       {
-        name: "CONTENT_FOLDER",
+        name: "SOURCE_FOLDER",
         doc: `The folder containing metadata.ts, schema.ts and default-content.ts. See the SDK demo app for structure of these files.`
       },
       {
@@ -22,7 +23,8 @@ const COMMANDS: Command[] = [
       },
       {
         name: "ASSETS_FOLDER",
-        doc: `The folder containing the app's static assets, used to verify that the files referenced by metadata.ts and default-content.ts exist.`
+        doc: `The folder containing the app's static assets, used to verify that the files referenced by metadata.ts and default-content.ts exist.`,
+        optional: true
       }
     ],
     doc: `Generate all content and metadata files.`,
@@ -44,15 +46,20 @@ if (!command) {
   usageError(`Invalid command "${commandName}"`);
 }
 
-if (args.length !== command.func.length) {
-  usageError(`Expected exactly ${command.func.length} arguments after "${command.name}""`);
+let minArgs = command.args.filter(a => !a.optional).length;
+let maxArgs = command.args.length;
+
+if (args.length < minArgs || args.length > maxArgs) {
+  let count = minArgs === maxArgs ? `exactly ${minArgs}` : `${minArgs} to ${maxArgs}`;
+  usageError(`Expected ${count} arguments after "${command.name}"s`);
 }
 
 command.func.apply(null, args);
 
 
-function generateAllCommand(contentSourceFolder: string, buildFolder: string, assetsFolder: string) {
+function generateAllCommand(contentSourceFolder: string, buildFolder: string, assetsFolder: string = contentSourceFolder) {
 
+  process.once("exit", cleanup);
 
   let schema = getModuleDefaultOutput("schema");
   writeJSONFile(schema, "schema");
@@ -65,6 +72,18 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
   writeJSONFile(metadata, "metadata");
   validateImage(metadata.defaultIconSrc, "metadata.defaultIconSrc");
   validateMenuNodes(metadata.menuNodes, "metadata.menuNodes");
+
+  let tmpDir = path.join(process.cwd(), "tmp");
+  let tsRequireDir = path.join(tmpDir, "tsreq");
+
+  function cleanup() {
+    rimraf.sync(tsRequireDir);
+    try {
+      fs.rmdirSync(tmpDir);
+    } catch (e) {
+      // leave tmp dir there is it's not empty, something else might be using it
+    }
+  }
 
 
   function validateDefaultContent(schema: any, content: any) {
@@ -200,7 +219,7 @@ function ensureParentDirExists(file: string) {
 interface Command {
   name: string;
   doc: string;
-  args?: { name: string, doc: string }[];
+  args?: { name: string, doc: string, optional?: boolean; }[];
   func: Function;
 }
 
