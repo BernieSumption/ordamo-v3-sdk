@@ -519,7 +519,7 @@ export interface ContentFieldOptions {
  * A specification for a bit of content that is to be provided to the
  * app by the CMS
  */
-export interface ContentDescriptor<T> {
+export interface ContentDescriptor<T> extends ContentFieldOptions {
   /**
    * The type of this object, formed by taking the lowercase interface name
    * minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
@@ -627,28 +627,28 @@ export interface ListOptions<O> {
 /**
  * Helper function for defining content managed images.
  */
-export function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions & ContentFieldOptions {
+export function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions {
   return Object.assign({ type: "image" }, options);
 }
 
 /**
  * Helper function for defining content managed text strings.
  */
-export function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions & ContentFieldOptions {
+export function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions {
   return Object.assign({ type: "text" }, options);
 }
 
 /**
  * Helper function for defining content managed numbers.
  */
-export function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions & ContentFieldOptions {
+export function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions {
   return Object.assign({ type: "number" }, options);
 }
 
 /**
  * Helper function for defining lists of content managed text strings.
  */
-export function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions {
+export function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> {
   options.items = Object.assign({ type: "text" }, options.items);
   return Object.assign({ type: "list" }, options);
 }
@@ -656,7 +656,7 @@ export function textList(options: ListOptions<TextOptions> & ContentFieldOptions
 /**
  * Helper function for defining lists of content managed images.
  */
-export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> & ContentFieldOptions {
+export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> {
   options.items = Object.assign({ type: "image" }, options.items);
   return Object.assign({ type: "list" }, options);
 }
@@ -664,7 +664,7 @@ export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptio
 /**
  * Helper function for defining lists of content managednumbersimages.
  */
-export function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions {
+export function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> {
   options.items = Object.assign({ type: "number" }, options.items);
   return Object.assign({ type: "list" }, options);
 }

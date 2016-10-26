@@ -183,7 +183,7 @@ export interface ContentFieldOptions {
  * A specification for a bit of content that is to be provided to the
  * app by the CMS
  */
-export interface ContentDescriptor<T> {
+export interface ContentDescriptor<T> extends ContentFieldOptions {
     /**
      * The type of this object, formed by taking the lowercase interface name
      * minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
@@ -284,27 +284,27 @@ export interface ListOptions<O> {
 /**
  * Helper function for defining content managed images.
  */
-export declare function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions & ContentFieldOptions;
+export declare function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions;
 /**
  * Helper function for defining content managed text strings.
  */
-export declare function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions & ContentFieldOptions;
+export declare function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions;
 /**
  * Helper function for defining content managed numbers.
  */
-export declare function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions & ContentFieldOptions;
+export declare function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions;
 /**
  * Helper function for defining lists of content managed text strings.
  */
-export declare function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions;
+export declare function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions>;
 /**
  * Helper function for defining lists of content managed images.
  */
-export declare function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> & ContentFieldOptions;
+export declare function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions>;
 /**
  * Helper function for defining lists of content managednumbersimages.
  */
-export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions;
+export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions>;
 export declare const AUTO_METADATA: string;
 export interface AppMetadata {
     /**

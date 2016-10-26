@@ -59,8 +59,8 @@ command.func.apply(null, args);
 
 function generateAllCommand(contentSourceFolder: string, buildFolder: string, assetsFolder: string = contentSourceFolder) {
 
-  const IMAGE_FORMATS = ["png", "jpg", "jpeg", "gif"];
-  const VIDEO_FORMATS = ["mp4", "ogv", "webm"];
+  const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif"];
+  const VIDEO_EXTENSIONS = ["mp4", "ogv", "webm"];
 
   process.once("exit", cleanup);
 
@@ -80,7 +80,7 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
     }
   }
   writeJSONFile(metadata, "metadata");
-  validateImage(metadata.defaultIconSrc, "metadata.defaultIconSrc", IMAGE_FORMATS);
+  validateImage(metadata.defaultIconSrc, "metadata.defaultIconSrc", false);
   validateMenuNodes(metadata.menuNodes, "metadata.menuNodes");
 
   let tmpDir = path.join(process.cwd(), "tmp");
@@ -120,7 +120,7 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
       let schemaItem: sdk.ContentDescriptor<any> & sdk.ListOptions<sdk.ImageOptions & sdk.ContentDescriptor<any>> & sdk.ImageOptions = schema[key];
       if (schemaItem.type === "image") {
         validateType([content[key]], "string", "a relative file path", key);
-        validateImage(content[key], `content.${key}`, schemaItem.isVideo ? VIDEO_FORMATS : IMAGE_FORMATS);
+        validateImage(content[key], `content.${key}`, schemaItem.isVideo);
       }
       if (schemaItem.type === "text") {
         validateType([content[key]], "string", "a string", key);
@@ -134,12 +134,12 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
         } else {
           if (schemaItem.items.type === "image") {
             validateType(content[key], "string", "an array of relative file paths", key);
-            (content[key] as string[]).forEach((path, i) => validateImage(path, `content.${key}[${i}]`, schemaItem.items.isVideo ? VIDEO_FORMATS : IMAGE_FORMATS));
+            (content[key] as string[]).forEach((path, i) => validateImage(path, `content.${key}[${i}]`, schemaItem.items.isVideo));
           }
           if (schemaItem.items.type === "text") {
             validateType(content[key], "string", "an array of strings", key);
           }
-          if (schemaItem.type === "number") {
+          if (schemaItem.items.type === "number") {
             validateType(content[key], "number", "an array of numbers", key);
           }
         }
@@ -169,18 +169,19 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
   }
 
   function validateMenuNode(node: sdk.MenuNode, propName: string) {
-    validateImage(node.iconSrc, `${propName}.iconSrc`, IMAGE_FORMATS);
+    validateImage(node.iconSrc, `${propName}.iconSrc`, false);
     validateMenuNodes(node.children, `${propName}.children`);
   }
 
-  function validateImage(imagePath: string, propName: string, formats: string[]) {
+  function validateImage(imagePath: string, propName: string, isVideo: boolean) {
     let source = path.resolve(assetsFolder, imagePath);
     if (!fs.existsSync(source)) {
       fatalError(`File "${source}" is referenced by ${propName} but does not exist.`);
     }
+    let extensions = isVideo  ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
     let extension = source.replace(/^[^\.]*\./, "").toLowerCase();
-    if (formats.indexOf(extension) === -1) {
-      fatalError(`File "${source}" referenced by ${propName} is th wrong type; supported extensions are: ${formats.join(", ")}`);
+    if (extensions.indexOf(extension) === -1) {
+      fatalError(`File "${source}" referenced by ${propName} is th wrong type; supported extensions are: ${extensions.join(", ")}`);
     }
   }
 
