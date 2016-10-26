@@ -674,6 +674,8 @@ export function numberList(options: ListOptions<NumberOptions> & ContentFieldOpt
 // METADATA
 //
 
+export const AUTO_METADATA = "ORDAMO_V3_SDK_AUTO_METADATA";
+
 export interface AppMetadata {
   /**
    * A unique app identifier - taken from the "name" in the app's package.json

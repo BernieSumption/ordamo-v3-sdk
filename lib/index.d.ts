@@ -304,6 +304,7 @@ export declare function imageList(options: ListOptions<ImageOptions> & ContentFi
  * Helper function for defining lists of content managednumbersimages.
  */
 export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions;
+export declare const AUTO_METADATA: string;
 export interface AppMetadata {
     /**
      * A unique app identifier - taken from the "name" in the app's package.json

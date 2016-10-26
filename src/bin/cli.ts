@@ -61,14 +61,21 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
 
   process.once("exit", cleanup);
 
-  let schema = getModuleDefaultOutput("schema");
-  writeJSONFile(schema, "schema");
+  let contentSchema = getModuleDefaultOutput("content-schema");
+  writeJSONFile(contentSchema, "content-schema");
 
   let defaultContent: any = getModuleDefaultOutput("default-content");
-  validateDefaultContent(schema, defaultContent);
+  validateDefaultContent(contentSchema, defaultContent);
   writeJSONFile(defaultContent, "default-content");
 
+  let appPackageJson = getAppPackageJSON(contentSourceFolder);
+
   let metadata: sdk.AppMetadata = getModuleDefaultOutput("metadata");
+  for (let prop in metadata) {
+    if ((metadata as any)[prop] === sdk.AUTO_METADATA) {
+      (metadata as any)[prop] = appPackageJson[prop];
+    }
+  }
   writeJSONFile(metadata, "metadata");
   validateImage(metadata.defaultIconSrc, "metadata.defaultIconSrc");
   validateMenuNodes(metadata.menuNodes, "metadata.menuNodes");
@@ -83,6 +90,20 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
     } catch (e) {
       // leave tmp dir there is it's not empty, something else might be using it
     }
+  }
+
+  function getAppPackageJSON(p: string) {
+    let testPath = path.resolve(p);
+    let prevPath = testPath;
+    do {
+      let testPackageFile = path.join(testPath, "package.json");
+      if (fs.existsSync(testPackageFile)) {
+        return JSON.parse(fs.readFileSync(testPackageFile, "utf8"));
+      }
+      prevPath = testPath;
+      testPath = path.dirname(testPath);
+    } while(testPath && testPath !== prevPath);
+    throw new Error(`Can't find package.json in "${p}" or any parent directories.`);
   }
 
 
