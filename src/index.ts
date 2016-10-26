@@ -613,16 +613,16 @@ export interface ListOptions<O> {
   /**
    * The inclusive minumum number of items in the list
    */
-  min: number;
+  minCount: number;
   /**
-   * The inclusive maximum number of items in the list, */
-  max: number;
+   * The inclusive maximum number of items in the list
+   */
+  maxCount: number;
   /**
    * An options object describing individual children
    */
   items: O;
 }
-
 
 /**
  * Helper function for defining content managed images.
