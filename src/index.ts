@@ -129,6 +129,20 @@ export class OrdamoSDK<T> {
     this._saveStateCallback = options.saveStateCallback;
     this._fullscreen = options.fullscreen;
 
+    this._initialise();
+  }
+
+  private _initialise() {
+    if (RUNNING_MODE === RunningMode.UNIT_TESTS) return;
+
+    if (document.readyState !== "complete") {
+      document.addEventListener("readystatechange", () => {
+        if (document.readyState === "complete") {
+          this._initialise();
+        }
+      });
+      return;
+    }
 
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
       this._initialiseDevelopmentMode();
@@ -137,9 +151,7 @@ export class OrdamoSDK<T> {
       this._initialiseHostedMode();
     }
 
-    if (RUNNING_MODE !== RunningMode.UNIT_TESTS) {
-      this._startTouchEmulation();
-    }
+    this._startTouchEmulation();
   }
 
   private _getSavedStateKey() {
@@ -319,10 +331,16 @@ export class OrdamoSDK<T> {
   private _initialiseDevelopmentMode() {
     logNotice(`running in development mode.`);
 
+    let isGoogle = navigator.vendor && navigator.vendor.indexOf("Google") === 0;
     let chromeVersion = /\bChrome\/(\d+)/.exec(navigator.userAgent);
-    if (!(chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
+    if (!(isGoogle && chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
       alert("Sorry, Ordamo V3 apps require a recent version of Google Chrome to run. Please load this app in Chrome, and/or ensure that your copy of Chrome is up to date.");
-      throw new Error("Bad browser: " + navigator.userAgent);
+      throw new Error(`Bad browser: ${navigator.vendor} ${navigator.userAgent}`);
+    }
+
+    if (location.href.indexOf("file:") === 0) {
+      alert(`Ordamo V3 apps must be run from a web server to function correctly - the address must start "http:" or "https:", not "file:".`);
+      throw new Error(`Bad browser: ${navigator.vendor} ${navigator.userAgent}`);
     }
 
     let mockLayout = makeMockLayout();

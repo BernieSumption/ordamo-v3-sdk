@@ -84,6 +84,7 @@ export declare class OrdamoSDK<T> {
      * @param _initAppCallback
      */
     constructor(options: OrdamoSDKOptions<T>);
+    private _initialise();
     private _getSavedStateKey();
     /**
      * This must be called once only after the app has rendered itself

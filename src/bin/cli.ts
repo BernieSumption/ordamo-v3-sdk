@@ -57,7 +57,7 @@ if (args.length < minArgs || args.length > maxArgs) {
 command.func.apply(null, args);
 
 
-function generateAllCommand(contentSourceFolder: string, buildFolder: string, assetsFolder: string = contentSourceFolder) {
+function generateAllCommand(contentSourceFolder: string, buildFolder: string, assetsFolder: string = buildFolder) {
 
   const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif"];
   const VIDEO_EXTENSIONS = ["mp4", "ogv", "webm"];
@@ -74,9 +74,14 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
   let appPackageJson = getAppPackageJSON(contentSourceFolder);
 
   let metadata: sdk.AppMetadata = getModuleDefaultOutput("metadata");
-  for (let prop in metadata) {
+  let keymap: any = {
+    "id": "name",
+    "description": "description",
+    "version": "version"
+  }
+  for (let prop in keymap) {
     if ((metadata as any)[prop] === sdk.AUTO_METADATA) {
-      (metadata as any)[prop] = appPackageJson[prop];
+      (metadata as any)[prop] = appPackageJson[keymap[prop]];
     }
   }
   writeJSONFile(metadata, "metadata");
@@ -178,7 +183,7 @@ function generateAllCommand(contentSourceFolder: string, buildFolder: string, as
     if (!fs.existsSync(source)) {
       fatalError(`File "${source}" is referenced by ${propName} but does not exist.`);
     }
-    let extensions = isVideo  ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
+    let extensions = isVideo ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
     let extension = source.replace(/^[^\.]*\./, "").toLowerCase();
     if (extensions.indexOf(extension) === -1) {
       fatalError(`File "${source}" referenced by ${propName} is th wrong type; supported extensions are: ${extensions.join(", ")}`);
