@@ -84,10 +84,12 @@ export declare class OrdamoSDK<T> {
      * @param _initAppCallback
      */
     constructor(options: OrdamoSDKOptions<T>);
+    private _initialise();
     private _getSavedStateKey();
     /**
      * This must be called once only after the app has rendered itself
-     * and it is safe to display. The app will be hidden until this is
+     * and it is safe to display. The app will be hidden until this is called, preventing the user
+     * from seeing e.g. half-loaded content.
      */
     notifyAppIsReady(): void;
     /**
@@ -182,7 +184,7 @@ export interface ContentFieldOptions {
  * A specification for a bit of content that is to be provided to the
  * app by the CMS
  */
-export interface ContentDescriptor<T> {
+export interface ContentDescriptor<T> extends ContentFieldOptions {
     /**
      * The type of this object, formed by taking the lowercase interface name
      * minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
@@ -270,10 +272,11 @@ export interface ListOptions<O> {
     /**
      * The inclusive minumum number of items in the list
      */
-    min: number;
+    minCount: number;
     /**
-     * The inclusive maximum number of items in the list, */
-    max: number;
+     * The inclusive maximum number of items in the list
+     */
+    maxCount: number;
     /**
      * An options object describing individual children
      */
@@ -282,35 +285,28 @@ export interface ListOptions<O> {
 /**
  * Helper function for defining content managed images.
  */
-export declare function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions & ContentFieldOptions;
+export declare function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions;
 /**
  * Helper function for defining content managed text strings.
  */
-export declare function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions & ContentFieldOptions;
+export declare function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions;
 /**
  * Helper function for defining content managed numbers.
  */
-export declare function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions & ContentFieldOptions;
+export declare function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions;
 /**
  * Helper function for defining lists of content managed text strings.
  */
-export declare function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions;
+export declare function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions>;
 /**
  * Helper function for defining lists of content managed images.
  */
-export declare function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> & ContentFieldOptions;
+export declare function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions>;
 /**
  * Helper function for defining lists of content managednumbersimages.
  */
-export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions;
-/**
- * Validate a content object against a schema.
- *
- * This function validates that the content has the right set of fields, but does
- * not perform semantic validation e.g. checking that the lengths of strings are
- * within the defined minLength and maxLength bounds.
- */
-export declare function validateContent(schema: any, content: any): any;
+export declare function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions>;
+export declare const AUTO_METADATA: string;
 export interface AppMetadata {
     /**
      * A unique app identifier - taken from the "name" in the app's package.json

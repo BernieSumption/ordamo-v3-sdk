@@ -1,1 +1,1 @@
-/// <reference path="../../node_modules/retyped-node-tsd-ambient/node.d.ts" />
+/// <reference path="../../typings/index.d.ts" />

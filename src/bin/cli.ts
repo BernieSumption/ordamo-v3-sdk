@@ -1,146 +1,58 @@
 #! /usr/bin/env node
 
-/// <reference path="../../node_modules/retyped-node-tsd-ambient/node.d.ts" />
+/// <reference path="../../typings/index.d.ts" />
 
 
-"use strict";
+import buildContentCOmmand from "./build-content-command";
+import writeAppHtmlCommand from "./write-app-html-command";
+import {fatalError, Command} from "./utils";
+require("typescript-require");
 
-import path = require("path");
-import fs = require("fs");
+const COMMANDS: Command[] = [buildContentCOmmand, writeAppHtmlCommand];
 
 if (process.argv.length < 3) {
-  fatalError("Not enough arguments");
+  usageError("Not enough arguments");
 }
+
+COMMANDS.forEach(c => { if (c.func.length !== c.args.length) { throw new Error(`"${c.name}" command definition error, function args not correctly documented`) } });
 
 let [commandName, ...args] = process.argv.slice(2);
 
-if (commandName === "generate") {
-  doCommand("generate", generateCommand, args);
-} else if (commandName === "generate-all") {
-  doCommand("generate-all", generateAllCommand, args);
-} else if (commandName === "concat-app-to-html") {
-  doCommand("concat-app-to-html", concatAppToHtmlCommand, args);
-} else if (commandName === "write-debug-html") {
-  doCommand("write-debug-html", writeAppHtmlCommand, args.concat(["app.js", "app.css"]));
-} else if (commandName === "write-app-html") {
-  doCommand("write-app-html", writeAppHtmlCommand, args);
-} else {
-  fatalError(`Invalid command "${commandName}"`);
+let command = COMMANDS.filter(c => c.name === commandName)[0];
+
+if (!command) {
+  usageError(`Invalid command "${commandName}"`);
 }
 
+let minArgs = command.args.filter(a => !a.optional).length;
+let maxArgs = command.args.length;
 
-function doCommand(name: string, f: Function, args: string[]) {
-  if (args.length !== f.length) {
-    fatalError(`Expected exactly ${f.length} arguments after "${name}""`);
-  }
-  f.apply(null, args);
+if (args.length < minArgs || args.length > maxArgs) {
+  let count = minArgs === maxArgs ? `exactly ${minArgs}` : `${minArgs} to ${maxArgs}`;
+  usageError(`Expected ${count} arguments after "${command.name}"`);
 }
 
-
-function generateCommand(modulePath: string, functionName: string, outputFile: string) {
-  let mod = require(path.resolve(modulePath));
-  let content = mod[functionName]();
-  let encoded = JSON.stringify(content, null, "  ");
-  outputFile = path.resolve(outputFile);
-  ensureParentDirExists(outputFile);
-  fs.writeFileSync(outputFile, encoded, { encoding: "utf8" });
-  console.log(`Wrote result of ${functionName}() to "${path.relative(".", outputFile)}"`);
-}
+command.func.apply(null, args);
 
 
-function generateAllCommand(scriptFolder: string, outputFolder: string) {
-  generateCommand(
-    path.resolve(scriptFolder, "default-content"),
-    "getContent",
-    path.resolve(outputFolder, "default-content.json"));
-  generateCommand(
-    path.resolve(scriptFolder, "metadata"),
-    "getMetadata",
-    path.resolve(outputFolder, "metadata.json"));
-  generateCommand(
-    path.resolve(scriptFolder, "schema"),
-    "getSchema",
-    path.resolve(outputFolder, "schema.json"));
-}
 
-function concatAppToHtmlCommand(jsFile: string, cssFile: string, outFile: string) {
 
-  let jsContent = fs.readFileSync(jsFile, "utf8");
-  let cssContent = fs.readFileSync(cssFile, "utf8");
-
-  if (jsContent.toLowerCase().indexOf("</script>") !== -1) {
-    console.error(`JS file "${jsFile}" contains the string "</script>" and therefore can't be embedded in HTML.`);
-  }
-
-  if (cssContent.toLowerCase().indexOf("</style>") !== -1) {
-    console.error(`JS file "${jsFile}" contains the string "</style>" and therefore can't be embedded in HTML.`);
-  }
-
-  let result = `
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-${cssContent}
-</style>
-</head>
-<body>
-<script>
-${jsContent}
-</script>
-</body>
-</html>
-`;
-
-  ensureParentDirExists(outFile);
-  fs.writeFileSync(outFile, result, { encoding: "utf8" });
-}
-
-function writeAppHtmlCommand(outFile: string, jsFile: string , cssFile: string) {
-  let result = `
-<html>
-<head>
-    <meta charset="UTF-8">
-    <script>
-    var appStyle = document.createElement("link");
-    appStyle.setAttribute("rel", "stylesheet");
-    appStyle.setAttribute("type", "text/css");
-    appStyle.setAttribute("href", ${JSON.stringify(cssFile)} + document.location.search);
-    document.head.appendChild(appStyle);
-    </script>
-</head>
-<body>
-<script>
-var appScript = document.createElement("script");
-appScript.setAttribute("src", ${JSON.stringify(jsFile)} + document.location.search);
-document.body.appendChild(appScript);
-</script>
-</body>
-</html>
-`;
-  ensureParentDirExists(outFile);
-  fs.writeFileSync(outFile, result, { encoding: "utf8" });
+function usageError(message: string) {
+  let commandDocs = COMMANDS.map(command => {
+    let args = (command.args || []).map(a => a.optional ? `[${a.name}]` : a.name).join(" ");
+    let argDocs = (command.args || [])
+      .map(a => `${a.name}: ${a.doc}`)
+      .join("\n\t\t");
+    if (argDocs !== "") argDocs = "\n\t\t" + argDocs;
+    return `ordamo-v3-sdk ${command.name} ${args}\n\t${command.doc}${argDocs}`;
+  });
+  fatalError(`${message}\nUsage:\n${commandDocs.join("\n")}`.replace(/\t/g, "   "));
 }
 
 
 
-function fatalError(message: string) {
-  console.error(`${message}
-Usage:
-Generate a single metadata JSON file
-  node ${path.basename(process.argv[1])} generate modulePath functionName outputFile
-  e.g. "generate content/default-content getContent build/out/default-content.json"
-Generate all metadata files assuming standard locations:
-  node ${path.basename(process.argv[1])} generate-all script-folder output-folder`);
-  process.exit(1);
-}
 
 
 
-function ensureParentDirExists(file: string) {
-  let dirName = path.dirname(file);
-  if (!fs.existsSync(dirName)) {
-    ensureParentDirExists(dirName);
-    fs.mkdirSync(dirName);
-  }
-}
+// silence console.error because subpackage depreciation notices are printed on exit and they're useless
+console.error = function () { };

@@ -129,6 +129,20 @@ export class OrdamoSDK<T> {
     this._saveStateCallback = options.saveStateCallback;
     this._fullscreen = options.fullscreen;
 
+    this._initialise();
+  }
+
+  private _initialise() {
+    if (RUNNING_MODE === RunningMode.UNIT_TESTS) return;
+
+    if (document.readyState !== "complete") {
+      document.addEventListener("readystatechange", () => {
+        if (document.readyState === "complete") {
+          this._initialise();
+        }
+      });
+      return;
+    }
 
     if (RUNNING_MODE === RunningMode.DEVELOPMENT) {
       this._initialiseDevelopmentMode();
@@ -137,9 +151,7 @@ export class OrdamoSDK<T> {
       this._initialiseHostedMode();
     }
 
-    if (RUNNING_MODE !== RunningMode.UNIT_TESTS) {
-      this._startTouchEmulation();
-    }
+    this._startTouchEmulation();
   }
 
   private _getSavedStateKey() {
@@ -148,7 +160,8 @@ export class OrdamoSDK<T> {
 
   /**
    * This must be called once only after the app has rendered itself
-   * and it is safe to display. The app will be hidden until this is
+   * and it is safe to display. The app will be hidden until this is called, preventing the user
+   * from seeing e.g. half-loaded content.
    */
   notifyAppIsReady(): void {
     if (!this._initMessage) {
@@ -318,10 +331,16 @@ export class OrdamoSDK<T> {
   private _initialiseDevelopmentMode() {
     logNotice(`running in development mode.`);
 
+    let isGoogle = navigator.vendor && navigator.vendor.indexOf("Google") === 0;
     let chromeVersion = /\bChrome\/(\d+)/.exec(navigator.userAgent);
-    if (!(chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
+    if (!(isGoogle && chromeVersion && parseInt(chromeVersion[1]) >= 46)) {
       alert("Sorry, Ordamo V3 apps require a recent version of Google Chrome to run. Please load this app in Chrome, and/or ensure that your copy of Chrome is up to date.");
-      throw new Error("Bad browser: " + navigator.userAgent);
+      throw new Error(`Bad browser: ${navigator.vendor} ${navigator.userAgent}`);
+    }
+
+    if (location.href.indexOf("file:") === 0) {
+      alert(`Ordamo V3 apps must be run from a web server to function correctly - the address must start "http:" or "https:", not "file:".`);
+      throw new Error(`Bad browser: ${navigator.vendor} ${navigator.userAgent}`);
     }
 
     let mockLayout = makeMockLayout();
@@ -372,7 +391,6 @@ export class OrdamoSDK<T> {
 
     if (this._contentSchema) {
       this._content = JSON.parse(JSON.stringify(this._contentSchema));
-      validateContent(this._contentSchema, this._initMessage.content);
       for (let prop in this._content) {
         this._content[prop].value = this._initMessage.content[prop];
       }
@@ -519,7 +537,7 @@ export interface ContentFieldOptions {
  * A specification for a bit of content that is to be provided to the
  * app by the CMS
  */
-export interface ContentDescriptor<T> {
+export interface ContentDescriptor<T> extends ContentFieldOptions {
   /**
    * The type of this object, formed by taking the lowercase interface name
    * minus the "description", e.g. an ImageDescriptor must have a type` value of "image"
@@ -613,42 +631,42 @@ export interface ListOptions<O> {
   /**
    * The inclusive minumum number of items in the list
    */
-  min: number;
+  minCount: number;
   /**
-   * The inclusive maximum number of items in the list, */
-  max: number;
+   * The inclusive maximum number of items in the list
+   */
+  maxCount: number;
   /**
    * An options object describing individual children
    */
   items: O;
 }
 
-
 /**
  * Helper function for defining content managed images.
  */
-export function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions & ContentFieldOptions {
+export function image(options: ImageOptions & ContentFieldOptions): ContentDescriptor<string> & ImageOptions {
   return Object.assign({ type: "image" }, options);
 }
 
 /**
  * Helper function for defining content managed text strings.
  */
-export function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions & ContentFieldOptions {
+export function text(options: TextOptions & ContentFieldOptions): ContentDescriptor<string> & TextOptions {
   return Object.assign({ type: "text" }, options);
 }
 
 /**
  * Helper function for defining content managed numbers.
  */
-export function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions & ContentFieldOptions {
+export function number(options: NumberOptions & ContentFieldOptions): ContentDescriptor<number> & NumberOptions {
   return Object.assign({ type: "number" }, options);
 }
 
 /**
  * Helper function for defining lists of content managed text strings.
  */
-export function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> & ContentFieldOptions {
+export function textList(options: ListOptions<TextOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<TextOptions> {
   options.items = Object.assign({ type: "text" }, options.items);
   return Object.assign({ type: "list" }, options);
 }
@@ -656,7 +674,7 @@ export function textList(options: ListOptions<TextOptions> & ContentFieldOptions
 /**
  * Helper function for defining lists of content managed images.
  */
-export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> & ContentFieldOptions {
+export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptions): ContentDescriptor<string[]> & ListOptions<ImageOptions> {
   options.items = Object.assign({ type: "image" }, options.items);
   return Object.assign({ type: "list" }, options);
 }
@@ -664,62 +682,17 @@ export function imageList(options: ListOptions<ImageOptions> & ContentFieldOptio
 /**
  * Helper function for defining lists of content managednumbersimages.
  */
-export function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> & ContentFieldOptions {
+export function numberList(options: ListOptions<NumberOptions> & ContentFieldOptions): ContentDescriptor<number[]> & ListOptions<NumberOptions> {
   options.items = Object.assign({ type: "number" }, options.items);
   return Object.assign({ type: "list" }, options);
 }
 
-/**
- * Validate a content object against a schema.
- *
- * This function validates that the content has the right set of fields, but does
- * not perform semantic validation e.g. checking that the lengths of strings are
- * within the defined minLength and maxLength bounds.
- */
-export function validateContent(schema: any, content: any) {
-  for (let key in schema) {
-    if (!(key in content)) {
-      throw new Error(`Schema contains item "${key} that is missing from the content.`);
-    }
-    let schemaItem: ContentDescriptor<any> & ListOptions<any> = schema[key];
-    if (schemaItem.type === "image" || schemaItem.type === "text") {
-      validateType([content[key]], "string", "a string", key);
-    }
-    if (schemaItem.type === "number") {
-      validateType([content[key]], "number", "a number", key);
-    }
-    if (schemaItem.type === "list") {
-      if (!Array.isArray(content[key])) {
-        throw new Error(`Expected content.${key} to be an array, but it is a ${typeof content[key]}`);
-      } else {
-        if (schemaItem.items.type === "image" || schemaItem.items.type === "text") {
-          validateType(content[key], "string", "an array of strings", key);
-        }
-        if (schemaItem.type === "number") {
-          validateType(content[key], "number", "an array of numbers", key);
-        }
-      }
-    }
-  }
-  for (let key in content) {
-    if (!(key in schema)) {
-      throw new Error(`Content contains item "${key}" that doesn't exist in the schema.`);
-    }
-  }
-  return content;
-
-  function validateType(items: any[], expectedType: string, expectedTypeHuman: string, key: string) {
-    for (let item of items) {
-      if (typeof item !== expectedType) {
-        throw new Error(`Expected content.${key} to be ${expectedTypeHuman}, but it contains a ${typeof item}`);
-      }
-    }
-  }
-}
 
 //
 // METADATA
 //
+
+export const AUTO_METADATA = "ORDAMO_V3_SDK_AUTO_METADATA";
 
 export interface AppMetadata {
   /**
