@@ -348,6 +348,11 @@ export interface AppMetadata {
 }
 export interface MenuNode {
     /**
+     * Reqired only if launchAppId is present. Uniquely identify this app instance
+     * for content management purposes.
+     */
+    id?: string;
+    /**
      * An icon used for the menu node. THIS IS REQUIRED unless launchAppId is used, in which case
      * it may be optionally ommitted and the app's default icon will be used in place.
      * A 250x250px image encoded as a data uri.
