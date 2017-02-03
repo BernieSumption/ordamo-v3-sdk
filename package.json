@@ -1,6 +1,6 @@
 {
   "name": "ordamo-v3-sdk",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "Software Development Kit for HTML/JS apps using the Ordamo V3 interactive projection system",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -24,6 +24,6 @@
   },
   "dependencies": {
     "rimraf": "^2.5.4",
-    "typescript-require": "^0.2.9"
+    "typescript-require": "berniesumption/typescript-require#7116e95edf570690b26fe3a54dfb8dec000536b3"
   }
 }

@@ -567,7 +567,7 @@ export interface ImageOptions {
    */
   maxHeight: number;
   /**
-   * An optional aspect ratio to constrain the image to
+   * An optional aspect ratio to constrain the image to. This is width / height, so 2 means twice as wide as high
    */
   aspectRatio?: number;
   /**
