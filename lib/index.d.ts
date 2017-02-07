@@ -213,7 +213,7 @@ export interface ImageOptions {
      */
     maxHeight: number;
     /**
-     * An optional aspect ratio to constrain the image to
+     * An optional aspect ratio to constrain the image to. This is width / height, so 2 means twice as wide as high
      */
     aspectRatio?: number;
     /**
@@ -367,6 +367,11 @@ export interface MenuNode {
      * fired with this string as an argument.
      */
     navigateButtonId?: string;
+    /**
+     * If true, this indicates that the app must have custom content in order to be shown to customers.
+     * If no custom content is assigned to the app, it will be hidden in the menu.
+     */
+    contentRequired?: boolean;
     /**
      * If present, clicking this menu item will cause the app of the specified ID to be
      * launched. WARNING: this is an advanced feature intended for use when several related

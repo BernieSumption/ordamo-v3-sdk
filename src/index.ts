@@ -761,6 +761,12 @@ export interface MenuNode {
   navigateButtonId?: string;
 
   /**
+   * If true, this indicates that the app must have custom content in order to be shown to customers.
+   * If no custom content is assigned to the app, it will be hidden in the menu.
+   */
+  contentRequired?: boolean;
+
+  /**
    * If present, clicking this menu item will cause the app of the specified ID to be
    * launched. WARNING: this is an advanced feature intended for use when several related
    * apps are controlled by a single "master" app. Most app authors do not need to use it.
