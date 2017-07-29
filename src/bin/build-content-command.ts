@@ -49,7 +49,7 @@ export function buildContentCOmmand(contentSourceFolder: string, buildFolder: st
     "id": "name",
     "description": "description",
     "version": "version"
-  }
+  };
   for (let prop in keymap) {
     if ((metadata as any)[prop] === sdk.AUTO_METADATA) {
       (metadata as any)[prop] = appPackageJson[keymap[prop]];

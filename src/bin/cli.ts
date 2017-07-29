@@ -14,7 +14,7 @@ if (process.argv.length < 3) {
   usageError("Not enough arguments");
 }
 
-COMMANDS.forEach(c => { if (c.func.length !== c.args.length) { throw new Error(`"${c.name}" command definition error, function args not correctly documented`) } });
+COMMANDS.forEach(c => { if (c.func.length !== c.args.length) { throw new Error(`"${c.name}" command definition error, function args not correctly documented`); } });
 
 let [commandName, ...args] = process.argv.slice(2);
 
